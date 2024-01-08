@@ -1,0 +1,9 @@
+{
+    "editor.trimAutoWhitespace": true,
+    "editor.rulers": [
+        80, 100
+    ],
+    "editor.codeActionsOnSave": {
+        "source.organizeImports": "explicit"
+    }
+}
