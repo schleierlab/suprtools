@@ -1,5 +1,6 @@
 import itertools
 from dataclasses import dataclass
+from fractions import Fraction
 
 import numpy as np
 from scipy.constants import c, pi
@@ -9,7 +10,8 @@ from sslab_txz.fp_theory.coupling import (CouplingConfig,
                                           NearConfocalCouplingMatrix)
 from sslab_txz.fp_theory.geometry._base import CavityGeometry
 from sslab_txz.fp_theory.modes import ScalarModeBasis
-from sslab_txz.fp_theory.operators import VectorModeOperator
+from sslab_txz.fp_theory.operators import (ScalarModeOperator,
+                                           VectorModeOperator)
 
 
 @dataclass
@@ -34,6 +36,36 @@ class SymmetricCavityGeometry(CavityGeometry):
     @property
     def z1(self) -> float:
         return self.length / 2
+
+    @property
+    def rx(self) -> float:
+        return self.mirror_curv_rad / (1 + self.eta_astig)
+
+    @property
+    def ry(self) -> float:
+        return self.mirror_curv_rad / (1 - self.eta_astig)
+
+    @property
+    def g_x(self) -> float:
+        return 1 - self.length / self.rx
+
+    @property
+    def g_y(self) -> float:
+        return 1 - self.length / self.ry
+
+    def paraxial_frequency(self, longi_ind: int, n_total: int) -> float:
+        return self.fsr * (longi_ind + (n_total + 1) * np.arccos(self.g) / pi)
+
+    def paraxial_mode_field(self, r, z, freq):
+        k = 2 * pi * freq / c
+        w0 = np.sqrt(2 * self.z0 / k)
+        z_norm = z / self.z0
+        w = w0 * np.sqrt(1 + z_norm**2)
+
+        inv_wavefront_curv = z_norm / (1 + z_norm**2) / self.z0
+        gouy_phase = np.arctan(z_norm)
+        return (w0 / w) * np.exp(-(r / w)**2) \
+            * np.cos(k*z + k * r**2 * inv_wavefront_curv / 2 - gouy_phase)
 
     @property
     def alpha(self) -> float:
@@ -72,16 +104,42 @@ class SymmetricCavityGeometry(CavityGeometry):
             # if not (l == 0 and s == -1)
         ])
 
-    def near_confocal_coupling_matrix(
+    def coupling_matrix(
             self,
-            q,
+            longi_ind_base: int,
+            scalar_basis: ScalarModeBasis,
             config: CouplingConfig,
-            max_order=6) -> NearConfocalCouplingMatrix:
-        paraxial_freq_00 = self.fsr * (q + np.arccos(self.g) / pi)
-        k = 2 * pi * paraxial_freq_00 / c
-        # w0 = np.sqrt(2 * self.z0 / k)
+            resonance_ratio: tuple[int, int] | Fraction | float | None,
+    ):
+        '''
+        Parameters
+        ----------
+        resonance_ratio
+            TODO
+        '''
+        match resonance_ratio:
+            case (int(num), int(denom)):
+                resonance_frac = Fraction(num, denom)
+            case Fraction(frac):
+                resonance_frac = Fraction(frac)  # redundant `Fraction` for vscode type analysis
+            case float(x):
+                resonance_frac = Fraction(x).limit_denominator(10)
+            case None:
+                resonance_frac = Fraction(np.arccos(self.g) / pi).limit_denominator(10)
+            case _:
+                raise ValueError()
 
+        if not 0 <= resonance_frac <= 1:
+            raise ValueError()
+
+        min_basis_order = min(mode.n for mode in scalar_basis)
+        min_order_mode_longi_ind = longi_ind_base \
+            - resonance_frac.numerator * (min_basis_order // resonance_frac.denominator)
+        paraxial_freq = self.paraxial_frequency(min_order_mode_longi_ind, min_basis_order)
+        k = 2 * pi * paraxial_freq / c
         pi_k_rm = pi * k * self.mirror_curv_rad
+
+        # *_cyc denotes operators expressed in units of cyclic phase: phase angle / (2 pi)
         h_prop_cyc = self.alpha**2 / (8 * pi_k_rm) * ops.pi_4_op
         h_wave_cyc = ((3 - self.alpha**2) * ops.rho_4 - 2 * ops.m_op) / (8 * pi_k_rm)
 
@@ -102,10 +160,8 @@ class SymmetricCavityGeometry(CavityGeometry):
             (h_asphere_cyc.vectorize(), config.asphere, config.asphere_xcoupling),
         ]
 
-        h_parax_cyc = (ops.n_op + 1) * (np.arccos(self.g)/pi - 0.5)
-        scalar_basis = ScalarModeBasis.make_transverse_mode_basis(
-            range(max_order % 2, max_order + 1, 2)
-        )
+        h_parax_cyc: ScalarModeOperator = \
+            (ops.n_op + 1) * (np.arccos(self.g)/pi - float(resonance_frac))
         matrix, vector_basis = h_parax_cyc.vectorize().toarray(scalar_basis)
         for op, include_bool, xcouple_bool in cyc_ops_configs:
             if not include_bool:
@@ -132,7 +188,6 @@ class SymmetricCavityGeometry(CavityGeometry):
             matrix += 2 * h_astig_cyc.vectorize().toarray(scalar_basis)[0]
 
         if config.v_plus_a:
-
             h_v_plus_a_dimless = VectorModeOperator([
                 [0, 1 - ops.nplus + ops.nminus],
                 [1 + ops.nplus - ops.nminus, 0],
@@ -141,10 +196,35 @@ class SymmetricCavityGeometry(CavityGeometry):
             h_v_plus_a = - self.eta_astig / (2 * pi_k_rm) * h_v_plus_a_dimless
             matrix += 2 * h_v_plus_a.toarray(scalar_basis)[0]
 
+        mode_generalized_parities = np.array([
+            mode.n % resonance_frac.denominator
+            for mode in scalar_basis
+        ])
+        generalized_parity = mode_generalized_parities[0]
+        if not np.all(mode_generalized_parities == generalized_parity):
+            raise ValueError
+        compensation_term = float(resonance_frac) * (generalized_parity + 1)
+
         return NearConfocalCouplingMatrix(
             cavity_geo=self,
             matrix=matrix,
             basis=vector_basis,
-            longi_ind_base=q,
-            parity=(max_order % 2),
+            longi_ind_base=longi_ind_base,
+            compensation_term=compensation_term,
+        )
+
+    def near_confocal_coupling_matrix(
+            self,
+            longi_ind_base: int,
+            config: CouplingConfig,
+            max_order=6) -> NearConfocalCouplingMatrix:
+
+        scalar_basis = ScalarModeBasis.make_transverse_mode_basis(
+            range(max_order % 2, max_order + 1, 2),
+        )
+        return self.coupling_matrix(
+            longi_ind_base,
+            scalar_basis,
+            config,
+            resonance_ratio=(1, 2),
         )

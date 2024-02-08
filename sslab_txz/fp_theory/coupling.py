@@ -15,7 +15,7 @@ from sslab_txz.fp_theory.modes import VectorModeBasis
 class CouplingConfig:
     prop: bool = True
     prop_xcoupling: bool = False
-    wave: bool = True,
+    wave: bool = True
     wave_xcoupling: bool = False
     vec: bool = True
     vec_xcoupling: bool = False
@@ -35,6 +35,13 @@ CouplingConfig.all_xcoupling = CouplingConfig(
     astig_xcoupling=True,
     asphere_xcoupling=True,
 )
+CouplingConfig.paraxial = CouplingConfig(
+    prop=False,
+    wave=False,
+    vec=False,
+    astig=True,
+    asphere=False,
+)
 
 
 class NearConfocalCouplingMatrix():
@@ -42,20 +49,21 @@ class NearConfocalCouplingMatrix():
     matrix: np.ndarray
     basis: VectorModeBasis
     longi_ind_base: int
-    parity: int
     eigvals: np.ndarray
     eigvecs: np.ndarray
 
-    def __init__(self, cavity_geo, matrix, basis: VectorModeBasis, longi_ind_base, parity):
+    def __init__(
+            self,
+            cavity_geo: CavityGeometry,
+            matrix, basis: VectorModeBasis,
+            longi_ind_base,
+            compensation_term):
         self.cavity_geo = cavity_geo
         self.matrix = matrix
         self.basis = basis
         self.longi_ind_base = longi_ind_base
-        self.parity = parity
 
         raw_eigvals, eigvecs = np.linalg.eigh(matrix)
-        compensation_term = (parity + 1) / 2  # 0.5 for even modes, 1 for odd modes
-
         self.eigvals = cavity_geo.fsr * (longi_ind_base + raw_eigvals + compensation_term)
         self.eigvecs = eigvecs.T
 
@@ -131,7 +139,7 @@ class NearConfocalCouplingMatrix():
             color=(lambda n: f'C{n//2+1}'),
             **kwargs):
         '''
-        offset: fsr_gues * offset_ind
+        offset: fsr_guess * offset_ind
         '''
         if ax is None:
             fig, ax = plt.subplots()
