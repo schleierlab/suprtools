@@ -1,6 +1,6 @@
 import itertools
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Literal
 
 import matplotlib.projections
 import numpy as np
@@ -207,6 +207,7 @@ class NearConfocalCouplingMatrix():
             inset_size=0.25,
             inset_stagger=0.23,
             inset_pad=0.2,
+            projection: Literal['polar', 'rectilinear'] = 'polar',
             fig=None,
             ax=None):
 
@@ -224,6 +225,13 @@ class NearConfocalCouplingMatrix():
         plot_eigvecs = self.eigvecs[inds]
         inset_levels = self.inset_level_maker(plot_eigvals, gap)
 
+        if projection == 'polar':
+            axes_class = matplotlib.projections.polar.PolarAxes
+        elif projection == 'rectilinear':
+            axes_class = None
+        else:
+            raise ValueError
+
         for eigval, eigvec, inset_level in zip(plot_eigvals, plot_eigvecs, inset_levels):
             plot_freq = (eigval - offset) / scaling
             inset_ax = inset_axes(
@@ -233,9 +241,9 @@ class NearConfocalCouplingMatrix():
                 loc='lower left',
                 bbox_to_anchor=[plot_freq, inset_stagger * inset_level],
                 bbox_transform=ax.get_xaxis_transform(),
-                axes_class=matplotlib.projections.polar.PolarAxes,
+                axes_class=axes_class,
                 borderpad=inset_pad,
             )
             inset_ax.axis('off')
-            self.basis.plot_field_intensity(eigvec, projection='polar', ax=inset_ax)
+            self.basis.plot_field_intensity(eigvec, projection=projection, ax=inset_ax)
             # ax.indicate_inset_zoom(inset_ax)

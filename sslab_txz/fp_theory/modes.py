@@ -133,7 +133,7 @@ class ModeBasis(object):
 
         ax.set_aspect(1)
 
-        if projection == 'cartesian':
+        if projection == 'rectilinear':
             xs = np.linspace(-6, 6, 101)
             ys = np.linspace(-6, 6, 101)
             xss, yss = np.meshgrid(xs, ys)
