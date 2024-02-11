@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.signal
 import skrf as rf
+import uncertainties
 from matplotlib.ticker import MultipleLocator
 from scipy.constants import pi
 from tqdm import tqdm
@@ -693,6 +694,122 @@ class VectorFittingFancy(rf.VectorFitting):
         ax_iq_zoom.set_ylim(ycent - halfmaxspan, ycent + halfmaxspan)
 
         return fig
+
+    def unravel_fit_params(self):
+        real_mask = (np.imag(self.poles) == 0)
+        return np.hstack((
+            np.real(self.poles[real_mask]),
+            np.real(self.poles[~real_mask]),
+            np.imag(self.poles[~real_mask]),
+            np.real(self.residues[0][real_mask]),
+            np.real(self.residues[0][~real_mask]),
+            np.imag(self.residues[0][real_mask]),
+            np.imag(self.residues[0][~real_mask]),
+        ))
+
+    def refine_fit(self):
+        fit_function_input = np.array(np.meshgrid(self.network.f, [0, 1])).reshape(2, -1).T
+        fit_function_values = np.hstack((
+            np.real(self.network.s.flatten()),
+            np.imag(self.network.s.flatten()),
+        ))
+
+        p0 = self.unravel_fit_params()
+        n_poles_real = np.sum(np.imag(self.poles) == 0)
+        n_poles_cmplx = len(self.poles) - n_poles_real
+
+        popt, pcov = scipy.optimize.curve_fit(
+            self.make_fit_function(n_poles_real, n_poles_cmplx),
+            fit_function_input,
+            fit_function_values,
+            p0=p0,
+        )
+
+        raveler = self.make_fit_param_raveler(n_poles_real, n_poles_cmplx, break_off_real_poles=False)
+        retval = raveler(uncertainties.correlated_values(popt, pcov))
+
+        raveled_optima = raveler(popt)
+        self.poles = raveled_optima[0] + 1j * raveled_optima[1]
+        self.residues = np.array([raveled_optima[2] + 1j * raveled_optima[3]])
+        return retval
+
+    @staticmethod
+    def make_fit_param_raveler(
+            n_poles_real: int,
+            n_poles_cmplx: int,
+            *,
+            break_off_real_poles: bool) -> callable:
+        '''
+        Create a function that aligns TODO
+        '''
+
+        n_poles_principal = n_poles_real + n_poles_cmplx
+        residues_idx = n_poles_real + 2 * n_poles_cmplx
+
+        def fit_param_raveler(args):
+            if len(args) != n_poles_principal * 4 - n_poles_real:
+                raise ValueError
+
+            poles_real = args[:n_poles_real]
+            poles_cmplx_parts = args[n_poles_real:residues_idx]
+            poles_cmplx_real = poles_cmplx_parts[:n_poles_cmplx]
+            poles_cmplx_imag = poles_cmplx_parts[n_poles_cmplx:]
+
+            residues_parts = args[residues_idx:]
+            residues_realparts = residues_parts[:n_poles_principal]
+            residues_imagparts = residues_parts[n_poles_principal:]
+
+            if break_off_real_poles:
+                return (
+                    poles_real,
+                    poles_cmplx_real,
+                    poles_cmplx_imag,
+                    residues_realparts[:n_poles_real],
+                    residues_realparts[n_poles_real:],
+                    residues_imagparts[:n_poles_real],
+                    residues_imagparts[n_poles_real:],
+                )
+            else:
+                return (
+                    np.hstack((poles_real, poles_cmplx_real)),
+                    np.hstack((np.zeros_like(poles_real), poles_cmplx_imag)),
+                    residues_realparts,
+                    residues_imagparts,
+                )
+
+        return fit_param_raveler
+
+    @classmethod
+    def make_fit_function(cls, n_poles_real, n_poles_cmplx):
+        raveler = cls.make_fit_param_raveler(n_poles_real, n_poles_cmplx, break_off_real_poles=True)
+
+        def fit_function(x, *args):
+            x = np.asarray(x)
+            freq, realimag = x[..., 0], x[..., 1]
+
+            s = 2 * np.pi * 1j * freq.reshape(-1, 1)
+            args = np.asarray(args)
+
+            raveled = raveler(args)
+            poles_real = raveled[0]
+            poles_cmplx_principal = raveled[1] + 1j * raveled[2]
+
+            residues_realpoles = raveled[3] + 1j * raveled[5]
+            residues_cmplxpoles_principal = raveled[4] + 1j * raveled[6]
+
+            realpole_contrib = np.sum(residues_realpoles / (s - poles_real), axis=-1)
+            cmplxpole_contrib = np.sum(
+                residues_cmplxpoles_principal / (s - poles_cmplx_principal)
+                + np.conj(residues_cmplxpoles_principal) / (s - np.conj(poles_cmplx_principal)),
+                axis=-1,
+            )
+
+            # np.real if realimag == 0 else np.imag
+            factor = np.ones_like(realimag, dtype='complex')
+            factor[(realimag == 1)] = 1j
+            return np.real((realpole_contrib + cmplxpole_contrib) / factor)
+
+        return fit_function
 
 
 def fit_mode(network, center_ghz, span_ghz, **vf_kwargs):
