@@ -7,11 +7,13 @@ import h5py
 import matplotlib.gridspec
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy.optimize
 import scipy.signal
 import skrf as rf
 import uncertainties
 from matplotlib.ticker import MultipleLocator
 from scipy.constants import pi
+from skrf.network import Network
 from tqdm import tqdm
 
 from sslab_txz.plotting import sslab_style
@@ -479,6 +481,10 @@ class WideScanData():
 
 
 class VectorFittingFancy(rf.VectorFitting):
+    def __init__(self, network: Network):
+        super().__init__(network)
+        self.refined_fit_params = None
+
     @staticmethod
     def _setup_iq_ax(ax, scale_str):
         ax.set_aspect(1)
@@ -502,11 +508,25 @@ class VectorFittingFancy(rf.VectorFitting):
 
     @property
     def fwhms(self):
-        return -2 * np.real(self.poles) / (2 * pi)
+        pole_real_parts = np.real(self.poles)
+        return -2 * pole_real_parts / (2 * pi)
+
+    @property
+    def refined_fwhms(self):
+        assert self.refined_fit_params is not None
+        pole_real_parts = self.refined_fit_params['poles']['real']
+        return -2 * pole_real_parts / (2 * pi)
 
     @property
     def resonances(self):
-        return np.imag(self.poles) / (2 * pi)
+        pole_imag_parts = np.imag(self.poles)
+        return pole_imag_parts / (2 * pi)
+
+    @property
+    def refined_resonances(self):
+        assert self.refined_fit_params is not None
+        pole_imag_parts = self.refined_fit_params['poles']['imag']
+        return pole_imag_parts / (2 * pi)
 
     def print_poles(self, freq_prec=3, fwhm_prec=4):
         print('Freq (GHz)\tFWHM (MHz)')
@@ -518,6 +538,25 @@ class VectorFittingFancy(rf.VectorFitting):
             pole_fwhm_str = pole_fwhm_fmt_str.format(-2 * np.real(pole) / (2 * pi * 1e6))
             print(f'{pole_freq_str}\t\t{pole_fwhm_str}')
 
+    def print_refined_poles(self):
+        print(f'{"Freq (GHz)":16}{"FWHM":^24}')
+        for freq, fwhm in zip(self.refined_resonances, self.refined_fwhms):
+            thousands = np.log10(fwhm.n) // 3
+            if thousands == 3:
+                unit = 'GHz'
+            elif thousands == 2:
+                unit = 'MHz'
+            elif thousands == 1:
+                unit = 'kHz'
+            elif thousands <= 0:
+                unit = 'Hz'
+                thousands = 0
+
+            fwhm_significand = fwhm / (1e+3)**thousands
+            fwhm_str = f'{fwhm_significand:S} {unit}'
+            print(f'{freq/1e+9:16S}{fwhm_str:>24}')
+
+    # TODO refactor this
     def visualize(self, plot_unit=None, polar_scale=1e3):
         fig = plt.figure(
             figsize=(9.6, 3.6),
@@ -695,121 +734,402 @@ class VectorFittingFancy(rf.VectorFitting):
 
         return fig
 
-    def unravel_fit_params(self):
-        real_mask = (np.imag(self.poles) == 0)
+    def _get_norm(self, norm: bool | float) -> float:
+        match norm:
+            case bool(b):
+                return np.mean(self.network.f) if b else 1
+            case float(n):
+                return n
+            case _:
+                raise ValueError()
+
+    def unravel_fit_params(self, norm: bool | float = True):
+        '''
+        Unravel the fit parameters in the following canonical ordering:
+
+        real poles
+        complex poles, real part
+        complex poles, imaginary part
+        residues of real poles, real part
+        residues of complex poles, real part
+        residues of real poles, imaginary part
+        residues of complex poles, imaginary part
+        constant coefficient (real), if nonzero
+        proportional coefficient (real), if nonzero
+
+        Parameters
+        ----------
+        norm : float or bool, optional
+            Controls whether we return poles and residues with some normalization.
+            If a float, gives the normalization in rad/s. Then
+
+            returned_poles = actual_poles / norm
+            returned_residues = actual_residues / norm
+            returned_propterm = actual_propterm * norm
+
+            If True, normalize to the mean network frequency. If False, do not normalize.
+
+        Returns
+        -------
+        ndarray
+            unraveled (real) fit parameters
+        '''
+        # TODO extend beyond 1-port networks
+        if self.network.nports > 1:
+            raise ValueError('Only 1-port networks supported.')
+
+        norm_val = self._get_norm(norm)
+        poles = self.poles / norm_val
+        residues = self.residues[0] / norm_val
+        constants = self.constant_coeff
+        props = self.proportional_coeff * norm_val
+
+        real_mask = (np.imag(poles) == 0)
         return np.hstack((
-            np.real(self.poles[real_mask]),
-            np.real(self.poles[~real_mask]),
-            np.imag(self.poles[~real_mask]),
-            np.real(self.residues[0][real_mask]),
-            np.real(self.residues[0][~real_mask]),
-            np.imag(self.residues[0][real_mask]),
-            np.imag(self.residues[0][~real_mask]),
+            np.real(poles[real_mask]),
+            np.real(poles[~real_mask]),
+            np.imag(poles[~real_mask]),
+            np.real(residues[real_mask]),
+            np.real(residues[~real_mask]),
+            np.imag(residues[real_mask]),
+            np.imag(residues[~real_mask]),
+            constants[constants != 0],
+            props[props != 0],
         ))
 
-    def refine_fit(self):
+    def refine_fit(
+            self,
+            sigma=None,
+            absolute_sigma=False,
+            norm=True):
         fit_function_input = np.array(np.meshgrid(self.network.f, [0, 1])).reshape(2, -1).T
         fit_function_values = np.hstack((
             np.real(self.network.s.flatten()),
             np.imag(self.network.s.flatten()),
         ))
 
-        p0 = self.unravel_fit_params()
+        p0 = self.unravel_fit_params(norm=norm)
+        bounds = np.sort((0.5*p0, 1.5*p0), axis=0)
         n_poles_real = np.sum(np.imag(self.poles) == 0)
         n_poles_cmplx = len(self.poles) - n_poles_real
+        constant_coeff = bool(self.constant_coeff[0])
+        proportional_coeff = bool(self.proportional_coeff[0])
 
-        popt, pcov = scipy.optimize.curve_fit(
-            self.make_fit_function(n_poles_real, n_poles_cmplx),
+        fit_sigma = None
+        if sigma is not None:
+            sigma = np.asarray(sigma)
+            match sigma.ndim:
+                case 0:
+                    fit_sigma = sigma * np.ones_like(fit_function_values)
+                case 1 | 2:
+                    fit_sigma = sigma
+                case _:
+                    raise ValueError()
+
+        fit_function, jacobian = self.make_fit_function(
+            n_poles_real,
+            n_poles_cmplx,
+            constant_coeff,
+            proportional_coeff,
+            norm=norm,
+        )
+        popt, pcov, *extra_info = scipy.optimize.curve_fit(
+            fit_function,
             fit_function_input,
             fit_function_values,
+            sigma=fit_sigma,
+            absolute_sigma=absolute_sigma,
             p0=p0,
+            bounds=bounds,
+            xtol=1e-12,
+            jac=jacobian,
+            full_output=True,
         )
 
-        raveler = self.make_fit_param_raveler(n_poles_real, n_poles_cmplx, break_off_real_poles=False)
-        retval = raveler(uncertainties.correlated_values(popt, pcov))
+        # print(popt)
+        # print(np.diag(pcov))
+        # print(f'pcov condition number: {np.linalg.cond(pcov)}')
+        # print(extra_info)
 
-        raveled_optima = raveler(popt)
-        self.poles = raveled_optima[0] + 1j * raveled_optima[1]
-        self.residues = np.array([raveled_optima[2] + 1j * raveled_optima[3]])
-        return retval
+        raveler = self.make_fit_param_raveler(
+            n_poles_real,
+            n_poles_cmplx,
+            constant_coeff,
+            proportional_coeff,
+            break_off_real_poles=False,
+            complex_values=False,
+            norm=norm,
+        )
 
-    @staticmethod
+        self.refined_fit_params = raveler(uncertainties.correlated_values(popt, pcov))
+
+        # raveled_optima = raveler(popt)
+        # self.poles = _complex_fromdict(raveled_optima['poles'])
+        # self.residues = _complex_fromdict(raveled_optima['residues'])[np.newaxis, ...]
+        return self.refined_fit_params
+
     def make_fit_param_raveler(
+            self,
             n_poles_real: int,
             n_poles_cmplx: int,
+            constant_coeff: bool,
+            proportional_coeff: bool,
             *,
-            break_off_real_poles: bool) -> callable:
+            norm: bool | float = True,
+            break_off_real_poles: bool,
+            complex_values: bool) -> callable:
         '''
-        Create a function that aligns TODO
+        Create a function that takes in the canonical Vector Fit parameter
+        ordering (defined in `unravel_fit_params`) and returns them grouped in a
+        dict.
+
+        Parameters
+        ----------
+        n_poles_real, n_poles_cmplx: int
+            Number of real and complex poles, respectively.
+        constant_coeff, proportional_coeff: bool
+            Whether to expect a constant or proportional coefficient.
+        break_off_real_poles: bool
+            Whether to group poles and residues by realness of poles.
+
+        Returns
+        -------
+        dict
+            with keys {'poles', 'residues'} and optionally also {'constants', 'proportionals'}.
+            If `break_off_real_poles` is true, the values for the keys
+            {'poles', 'residues'} are themselves dicts with keys {'real', 'complex'}.
+            In all cases the ordering of the poles is the same as that of the residues.
         '''
+        norm_val = self._get_norm(norm)
 
         n_poles_principal = n_poles_real + n_poles_cmplx
         residues_idx = n_poles_real + 2 * n_poles_cmplx
+        residues_end_idx = residues_idx + 2 * n_poles_principal
+
+        expected_nargs = 4 * n_poles_principal - n_poles_real \
+            + int(constant_coeff) + int(proportional_coeff)
 
         def fit_param_raveler(args):
-            if len(args) != n_poles_principal * 4 - n_poles_real:
+            args = np.asarray(args)
+            if len(args) != expected_nargs:
                 raise ValueError
 
-            poles_real = args[:n_poles_real]
-            poles_cmplx_parts = args[n_poles_real:residues_idx]
+            poles_real = norm_val * args[:n_poles_real]
+            poles_cmplx_parts = norm_val * args[n_poles_real:residues_idx]
+            residues_parts = norm_val * args[residues_idx:residues_end_idx]
+            misc_terms_normed = iter(args[residues_end_idx:])
+
             poles_cmplx_real = poles_cmplx_parts[:n_poles_cmplx]
             poles_cmplx_imag = poles_cmplx_parts[n_poles_cmplx:]
 
-            residues_parts = args[residues_idx:]
             residues_realparts = residues_parts[:n_poles_principal]
             residues_imagparts = residues_parts[n_poles_principal:]
 
-            if break_off_real_poles:
-                return (
-                    poles_real,
-                    poles_cmplx_real,
-                    poles_cmplx_imag,
-                    residues_realparts[:n_poles_real],
-                    residues_realparts[n_poles_real:],
-                    residues_imagparts[:n_poles_real],
-                    residues_imagparts[n_poles_real:],
-                )
-            else:
-                return (
-                    np.hstack((poles_real, poles_cmplx_real)),
-                    np.hstack((np.zeros_like(poles_real), poles_cmplx_imag)),
-                    residues_realparts,
-                    residues_imagparts,
-                )
+            retval = {
+                'poles': {
+                    'real': {
+                        'real': poles_real,
+                        'imag': np.zeros_like(poles_real),
+                    },
+                    'complex': {
+                        'real': poles_cmplx_real,
+                        'imag': poles_cmplx_imag,
+                    },
+                },
+                'residues': {
+                    'real': {
+                        'real': residues_realparts[:n_poles_real],
+                        'imag': residues_imagparts[:n_poles_real],
+                    },
+                    'complex': {
+                        'real': residues_realparts[n_poles_real:],
+                        'imag': residues_imagparts[n_poles_real:],
+                    },
+                },
+            }
+            if constant_coeff:
+                retval['constants'] = next(misc_terms_normed)
+            if proportional_coeff:
+                retval['proportionals'] = next(misc_terms_normed) / norm_val
+
+            try:
+                next(misc_terms_normed)
+                raise ValueError('Too many arguments!')
+            except StopIteration:
+                pass
+
+            # casework through all four combos of `complex_values` and `break_off_real_poles`
+
+            if not complex_values and break_off_real_poles:
+                return retval
+            elif not complex_values and not break_off_real_poles:
+                for key in ['poles', 'residues']:
+                    retval[key] = {
+                        subsubkey: np.concatenate((
+                            retval[key]['real'][subsubkey],
+                            retval[key]['complex'][subsubkey],
+                        ))
+                        for subsubkey in ['real', 'imag']
+                    }
+                return retval
+
+            assert complex_values
+
+            for key in ['poles', 'residues']:
+                for subkey in ['real', 'complex']:
+                    values_dict = retval[key][subkey]
+                    retval[key][subkey] = values_dict['real'] + 1j * values_dict['imag']
+
+            if not break_off_real_poles:
+                for key in ['poles', 'residues']:
+                    retval[key] = np.hstack((
+                        retval[key]['real'],
+                        retval[key]['complex'],
+                    ))
+            return retval
 
         return fit_param_raveler
 
-    @classmethod
-    def make_fit_function(cls, n_poles_real, n_poles_cmplx):
-        raveler = cls.make_fit_param_raveler(n_poles_real, n_poles_cmplx, break_off_real_poles=True)
+    def make_fit_function(
+            self,
+            n_poles_real: int,
+            n_poles_cmplx: int,
+            constant_coeff: bool,
+            proportional_coeff: bool,
+            norm: bool | float = True):
+
+        raveler = self.make_fit_param_raveler(
+            n_poles_real,
+            n_poles_cmplx,
+            constant_coeff,
+            proportional_coeff,
+            break_off_real_poles=True,
+            complex_values=True,
+            norm=False,  # work with normalized values in the fit function
+        )
 
         def fit_function(x, *args):
+            '''
+            Parameters
+            ----------
+            x : arraylike (2,) or (N, 2)
+                Pair (or N pairs) of fit function inputs: (frequency, realimag_flag)
+                where realimag_flag is (0, 1)
+            args
+                Unraveled fit function parameters, ordered as defined in
+                `unravel_fit_params` and normalized as specified by `norm`
+            '''
             x = np.asarray(x)
             freq, realimag = x[..., 0], x[..., 1]
 
-            s = 2 * np.pi * 1j * freq.reshape(-1, 1)
-            args = np.asarray(args)
+            # create extra dimension to be broadcast over n_poles
+            s = 2 * np.pi * 1j * freq.reshape(-1, 1) / self._get_norm(norm)
 
-            raveled = raveler(args)
-            poles_real = raveled[0]
-            poles_cmplx_principal = raveled[1] + 1j * raveled[2]
+            params = raveler(args)
 
-            residues_realpoles = raveled[3] + 1j * raveled[5]
-            residues_cmplxpoles_principal = raveled[4] + 1j * raveled[6]
-
-            realpole_contrib = np.sum(residues_realpoles / (s - poles_real), axis=-1)
-            cmplxpole_contrib = np.sum(
-                residues_cmplxpoles_principal / (s - poles_cmplx_principal)
-                + np.conj(residues_cmplxpoles_principal) / (s - np.conj(poles_cmplx_principal)),
+            realpole_contrib = np.sum(
+                params['residues']['real'] / (s - params['poles']['real']),
                 axis=-1,
             )
+            cmplxpole_contrib = np.sum(
+                params['residues']['complex'] / (s - params['poles']['complex'])
+                + (
+                    np.conj(params['residues']['complex'])
+                    /
+                    (s - np.conj(params['poles']['complex']))
+                ),
+                axis=-1,
+            )
+
+            retval_complex = realpole_contrib + cmplxpole_contrib
+            if constant_coeff:
+                retval_complex += params['constants']
+            if proportional_coeff:
+                retval_complex += params['proportional'] * s
 
             # np.real if realimag == 0 else np.imag
             factor = np.ones_like(realimag, dtype='complex')
             factor[(realimag == 1)] = 1j
-            return np.real((realpole_contrib + cmplxpole_contrib) / factor)
+            return np.real(retval_complex / factor)
 
-        return fit_function
+        def jacobian(x, *args):
+            '''
+            Parameters
+            ----------
+            x : array_like, (..., 2)
+                Tuples (frequency [Hz], {0, 1}) where the second term specifies
+                whether to specify real and imaginary parts.
+            args : float
+                Unraveled fit function parameters, ordered as in
+                `unravel_fit_params` and normalized as specified by `norm`.
+
+            Returns
+            -------
+            array_like, (..., n_poles)
+                The real or imaginary parts of the Jacobian evaluated at the
+                frequencies in `x`. The choice of real or imagainary part is
+                determined by the {0, 1} values in `x`.
+            '''
+            x = np.asarray(x)
+            freq, realimag = x[..., 0], x[..., 1]
+
+            # create extra dimension to be broadcast over n_poles
+            s = 2 * np.pi * 1j * freq[..., np.newaxis] / self._get_norm(norm)
+
+            params = raveler(args)
+
+            realpole_grad = params['residues']['real'] / (s - params['poles']['real'])**2
+            cmplxpole_realpart_grad = (
+                params['residues']['complex'] / (s - params['poles']['complex'])**2
+                + (
+                    np.conj(params['residues']['complex'])
+                    /
+                    (s - np.conj(params['poles']['complex']))**2
+                )
+            )
+            cmplxpole_imagpart_grad = 1j * (
+                params['residues']['complex'] / (s - params['poles']['complex'])**2
+                - (
+                    np.conj(params['residues']['complex'])
+                    /
+                    (s - np.conj(params['poles']['complex']))**2
+                )
+            )
+
+            realpole_res_realpart_grad = 1 / (s - params['poles']['real'])
+            cmplxpole_res_realpart_grad = (
+                1 / (s - params['poles']['complex'])
+                + 1 / (s - np.conj(params['poles']['complex']))
+            )
+
+            realpole_res_imagpart_grad = 1j * realpole_res_realpart_grad
+            cmplxpole_res_imagpart_grad = 1j * (
+                1 / (s - params['poles']['complex'])
+                - 1 / (s - np.conj(params['poles']['complex']))
+            )
+
+            grad_cmpnts = [
+                realpole_grad,
+                cmplxpole_realpart_grad,
+                cmplxpole_imagpart_grad,
+                realpole_res_realpart_grad,
+                cmplxpole_res_realpart_grad,
+                realpole_res_imagpart_grad,
+                cmplxpole_res_imagpart_grad,
+            ]
+            if constant_coeff:
+                grad_cmpnts.append(np.ones_like(s))
+            if proportional_coeff:
+                grad_cmpnts.append(s)
+
+            cmplx_gradient = np.concatenate(grad_cmpnts, axis=-1)  # shape: (n_freqs, n_poles)
+
+            # np.real if realimag == 0 else np.imag
+            factor = np.ones_like(realimag, dtype='complex')
+            factor[(realimag == 1)] = 1j
+            return np.real(cmplx_gradient / factor[:, np.newaxis])
+
+        return fit_function, jacobian
 
 
 def fit_mode(network, center_ghz, span_ghz, **vf_kwargs):
