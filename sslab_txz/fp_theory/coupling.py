@@ -217,7 +217,8 @@ class NearConfocalCouplingMatrix():
             inset_pad=0.2,
             projection: Literal['polar', 'rectilinear'] = 'polar',
             fig=None,
-            ax=None):
+            ax=None,
+            **kwargs):
 
         if (fig is None) and (ax is None):
             fig, ax = plt.subplots()
@@ -253,5 +254,5 @@ class NearConfocalCouplingMatrix():
                 borderpad=inset_pad,
             )
             inset_ax.axis('off')
-            self.basis.plot_field_intensity(eigvec, projection=projection, ax=inset_ax)
+            self.basis.plot_field_intensity(eigvec, projection=projection, ax=inset_ax, **kwargs)
             # ax.indicate_inset_zoom(inset_ax)
