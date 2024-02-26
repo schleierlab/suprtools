@@ -1,7 +1,8 @@
+import copy
 import datetime
 import functools
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 import h5py
 import matplotlib.gridspec
@@ -15,6 +16,7 @@ from matplotlib.ticker import MultipleLocator
 from scipy.constants import pi
 from skrf.network import Network
 from tqdm import tqdm
+from uncertainties import unumpy
 
 from sslab_txz.plotting import sslab_style
 
@@ -484,6 +486,7 @@ class VectorFittingFancy(rf.VectorFitting):
     def __init__(self, network: Network):
         super().__init__(network)
         self.refined_fit_params = None
+        self.refined_model: Optional[VectorFittingFancy] = None
 
     @staticmethod
     def _setup_iq_ax(ax, scale_str):
@@ -556,7 +559,6 @@ class VectorFittingFancy(rf.VectorFitting):
             fwhm_str = f'{fwhm_significand:S} {unit}'
             print(f'{freq/1e+9:16S}{fwhm_str:>24}')
 
-    # TODO refactor this
     def visualize(self, plot_unit=None, polar_scale=1e3):
         fig = plt.figure(
             figsize=(9.6, 3.6),
@@ -587,28 +589,14 @@ class VectorFittingFancy(rf.VectorFitting):
         else:
             raise NotImplementedError('only powers of 10 supported')
 
-        ax_iq.set_title(fr'$S_{{21}} \times {polar_scale_latex_str}$')
-
         self._setup_iq_ax(ax_iq_zoom, polar_scale_latex_str)
 
-        # xoffset = int(freq_obj.center / freq_obj.multiplier) * freq_obj.multiplier
-        # def freq_to_xunit(f):
-        #     return (f - xoffset) / freq_obj.multiplier_dict[plot_unit]
-
-        network = self.network
-        freq_obj = network.frequency
-        freq_min, freq_max = freq_obj.f[[0, -1]]
-        freq_range = np.linspace(freq_min, freq_max, 5001)
+        freq_obj = self.network.frequency
 
         if plot_unit is None:
-            if freq_obj.span > 1e+6:
-                plot_unit = 'mhz'
-            elif freq_obj.span > 1e+3:
-                plot_unit = 'khz'
-            elif freq_obj.span > 1e+0:
-                plot_unit = 'hz'
+            plot_unit = self._default_plot_unit()
 
-        xoffset, offset_multiplier, freq_to_xunit = self._get_offset_and_func(
+        xoffset, offset_multiplier, _ = self._get_offset_and_func(
             freq_obj.center,
             freq_obj.multiplier_dict[plot_unit],
         )
@@ -633,72 +621,39 @@ class VectorFittingFancy(rf.VectorFitting):
             return three_digit_str
         ax_phase.xaxis.set_major_formatter(major_formatter)
 
-        # offset_data_freqs = freq_to_xunit(freq_obj.f)
-        offset_freq_range = freq_to_xunit(freq_range)
-
-        model_response = self.get_model_response(0, 0, freqs=freq_range)
-        model_response_discrete = self.get_model_response(0, 0, freqs=network.frequency.f)
+        data_color = 'C0'
+        model_color = 'red'
 
         marker_plot_kwargs = dict(
             marker='.',
             markersize=1,
             linestyle='None',
+            color=data_color,
         )
 
         model_plot_kwargs = dict(
             linewidth=1.5,
             alpha=0.5,
-            color='red',
+            color=model_color,
+            label=f'Vector fit (RMS error {self.get_rms_error(0, 0):.3E})',
         )
 
-        lines = ax_mag.plot(
-            freq_to_xunit(network.frequency.f),
-            rf.mathFunctions.complex_2_db(network.s.flatten()),
-            **marker_plot_kwargs,
+        self.plot_model_db(
+            ax=ax_mag,
+            model_plot_kw=model_plot_kwargs,
+            data_plot_kw=marker_plot_kwargs,
         )
-        # line = lines[0]
-        ax_mag.plot(
-            offset_freq_range,
-            rf.mathFunctions.complex_2_db(model_response),
-            **model_plot_kwargs,
+        self.plot_model_deg_unwrap(
+            ax=ax_phase,
+            model_plot_kw=model_plot_kwargs,
+            data_plot_kw=marker_plot_kwargs,
         )
-
-        ax_phase.plot(
-            freq_to_xunit(network.frequency.f),
-            np.unwrap(rf.mathFunctions.complex_2_degree(network.s.flatten()), period=360),
-            **marker_plot_kwargs,
-        )
-
-        ax_phase.plot(
-            offset_freq_range,
-            np.unwrap(rf.mathFunctions.complex_2_degree(model_response), period=360),
-            **model_plot_kwargs,
-        )
-
-        rms_error = np.sqrt(np.mean(np.abs((model_response_discrete - network.s.flatten())**2)))
-        print(f'Mean sq error: {rms_error:.3E}')
-
-        scaled_model_response = model_response_discrete * polar_scale
-        scaled_sparam = network.s.flatten() * polar_scale
 
         iq_model_plot_kw = dict(
             marker='x',
             linestyle='None',
             markersize=1,
-            color='red',
-        )
-        ax_iq.plot(
-            rf.complex_2_radian(scaled_model_response),
-            rf.complex_2_magnitude(scaled_model_response),
-            # color=lines[0].get_color(),
-            **iq_model_plot_kw,
-        )
-
-        ax_iq_zoom.plot(
-            np.real(scaled_model_response),
-            np.imag(scaled_model_response),
-            # color=lines[0].get_color(),
-            **iq_model_plot_kw,
+            color=model_color,
         )
 
         iq_data_plot_kw = dict(
@@ -707,32 +662,188 @@ class VectorFittingFancy(rf.VectorFitting):
             alpha=0.3,
             # linestyle='None',
             linewidth=1,
-        )
-        ax_iq.plot(
-            rf.complex_2_radian(scaled_sparam),
-            rf.complex_2_magnitude(scaled_sparam),
-            color=lines[0].get_color(),
-            **iq_data_plot_kw,
+            color=data_color,
         )
 
-        ax_iq_zoom.plot(
-            np.real(scaled_sparam),
-            np.imag(scaled_sparam),
-            color=lines[0].get_color(),
-            **iq_data_plot_kw,
+        self.plot_model_polar(
+            ax=ax_iq,
+            model_plot_kw=iq_model_plot_kw,
+            data_plot_kw=iq_data_plot_kw,
+            scale=polar_scale,
+        )
+        self.plot_model_cartesian(
+            ax=ax_iq_zoom,
+            model_plot_kw=iq_model_plot_kw,
+            data_plot_kw=iq_data_plot_kw,
+            scale=polar_scale,
         )
 
-        xmin, xmax = ax_iq_zoom.get_xlim()
-        ymin, ymax = ax_iq_zoom.get_ylim()
+        ax_iq.set_title(fr'$S_{{21}} \times {polar_scale_latex_str}$')
+
+        fig.ax_mag = ax_mag
+        fig.ax_phase = ax_phase
+        fig.ax_iq = ax_iq
+        fig.ax_iq_zoom = ax_iq_zoom
+        return fig
+
+    def _default_plot_unit(self):
+        freq_obj = self.network.frequency
+        if freq_obj.span > 1e+6:
+            return 'mhz'
+        elif freq_obj.span > 1e+3:
+            return 'khz'
+        elif freq_obj.span > 1e+0:
+            return 'hz'
+
+    def plot_model_scalar(
+            self,
+            converter,
+            ax=None,
+            data_plot_kw=dict(),
+            model_plot_kw=dict(),
+            refined_plot_kw=None,
+            plot_unit=None):
+        if ax is None:
+            _, ax = plt.subplots()
+
+        freq_obj = self.network.frequency
+        if plot_unit is None:
+            plot_unit = self._default_plot_unit()
+
+        _, _, freq_to_xunit = self._get_offset_and_func(
+            freq_obj.center,
+            freq_obj.multiplier_dict[plot_unit],
+        )
+
+        freq_min, freq_max = self.network.frequency.f[[0, -1]]
+        freq_range = np.linspace(freq_min, freq_max, 5001)
+        offset_freq_range = freq_to_xunit(freq_range)
+        model_response = self.get_model_response(0, 0, freqs=freq_range)
+
+        ax.plot(
+            freq_to_xunit(self.network.frequency.f),
+            converter(self.network.s.flatten()),
+            **data_plot_kw,
+        )
+        ax.plot(
+            offset_freq_range,
+            converter(model_response),
+            **model_plot_kw,
+        )
+        if self.refined_model is not None:
+            refined_response = self.refined_model.get_model_response(0, 0, freqs=freq_range)
+
+            if refined_plot_kw is None:
+                refined_plot_kw = copy.copy(model_plot_kw)
+                refined_plot_kw['color'] = 'green'
+                refined_plot_kw['label'] = \
+                    f'Refined (RMS error {self.refined_model.get_rms_error(0, 0):.3E})'
+            ax.plot(
+                offset_freq_range,
+                converter(refined_response),
+                **refined_plot_kw,
+            )
+
+    def plot_model_db(self, ax=None, data_plot_kw=dict(), model_plot_kw=dict(), plot_unit=None):
+        if ax is None:
+            _, ax = plt.subplots()
+
+        self.plot_model_scalar(
+            rf.mathFunctions.complex_2_db,
+            ax=ax,
+            model_plot_kw=model_plot_kw,
+            data_plot_kw=data_plot_kw,
+        )
+
+    def plot_model_deg_unwrap(
+            self,
+            ax=None,
+            data_plot_kw=dict(),
+            model_plot_kw=dict(),
+            plot_unit=None):
+        if ax is None:
+            _, ax = plt.subplots()
+
+        self.plot_model_scalar(
+            lambda s: np.unwrap(rf.mathFunctions.complex_2_degree(s), period=360),
+            ax=ax,
+            data_plot_kw=data_plot_kw,
+            model_plot_kw=model_plot_kw,
+        )
+
+    def plot_model_parametric(
+            self,
+            x_converter,
+            y_converter,
+            ax,
+            data_plot_kw=dict(),
+            model_plot_kw=dict(),
+            refined_plot_kw=None,
+            scale=1):
+
+        scaled_model_response = scale \
+            * self.get_model_response(0, 0, freqs=self.network.frequency.f)
+        scaled_sparam = self.network.s.flatten() * scale
+
+        ax.plot(
+            x_converter(scaled_model_response),
+            y_converter(scaled_model_response),
+            **model_plot_kw,
+        )
+        ax.plot(
+            x_converter(scaled_sparam),
+            y_converter(scaled_sparam),
+            **data_plot_kw,
+        )
+
+        if self.refined_model is not None:
+            refined_response_scaled = scale \
+                * self.refined_model.get_model_response(0, 0, freqs=self.network.frequency.f)
+
+            if refined_plot_kw is None:
+                refined_plot_kw = copy.copy(model_plot_kw)
+                refined_plot_kw['color'] = 'green'
+            ax.plot(
+                x_converter(refined_response_scaled),
+                y_converter(refined_response_scaled),
+                **refined_plot_kw,
+            )
+
+    def plot_model_polar(self, ax=None, data_plot_kw=dict(), model_plot_kw=dict(), scale=1):
+        if ax is None:
+            _, ax = plt.subplots(subplot_kw=dict(projection='polar'))
+
+        self.plot_model_parametric(
+            rf.complex_2_radian,
+            rf.complex_2_magnitude,
+            ax,
+            data_plot_kw=data_plot_kw,
+            model_plot_kw=model_plot_kw,
+            scale=scale,
+        )
+
+    def plot_model_cartesian(self, ax=None, model_plot_kw=dict(), data_plot_kw=dict(), scale=1):
+        if ax is None:
+            _, ax = plt.subplots()
+
+        self.plot_model_parametric(
+            np.real,
+            np.imag,
+            ax,
+            data_plot_kw=data_plot_kw,
+            model_plot_kw=model_plot_kw,
+            scale=scale,
+        )
+
+        xmin, xmax = ax.get_xlim()
+        ymin, ymax = ax.get_ylim()
 
         xcent, ycent = (xmin + xmax) / 2, (ymin + ymax)/2
         maxspan = max(xmax - xmin, ymax - ymin)
         halfmaxspan = maxspan / 2
 
-        ax_iq_zoom.set_xlim(xcent - halfmaxspan, xcent + halfmaxspan)
-        ax_iq_zoom.set_ylim(ycent - halfmaxspan, ycent + halfmaxspan)
-
-        return fig
+        ax.set_xlim(xcent - halfmaxspan, xcent + halfmaxspan)
+        ax.set_ylim(ycent - halfmaxspan, ycent + halfmaxspan)
 
     def _get_norm(self, norm: bool | float) -> float:
         match norm:
@@ -861,12 +972,20 @@ class VectorFittingFancy(rf.VectorFitting):
             norm=norm,
         )
 
-        self.refined_fit_params = raveler(uncertainties.correlated_values(popt, pcov))
+        refined_params = raveler(uncertainties.correlated_values(popt, pcov))
+        self.refined_fit_params = refined_params
 
-        # raveled_optima = raveler(popt)
-        # self.poles = _complex_fromdict(raveled_optima['poles'])
-        # self.residues = _complex_fromdict(raveled_optima['residues'])[np.newaxis, ...]
-        return self.refined_fit_params
+        new_vf = VectorFittingFancy(self.network)
+        new_vf.poles = unumpy.nominal_values(refined_params['poles']['real']) \
+            + unumpy.nominal_values(refined_params['poles']['imag']) * 1j
+        new_vf.residues = (
+            unumpy.nominal_values(refined_params['residues']['real'])
+            + unumpy.nominal_values(refined_params['residues']['imag']) * 1j)[np.newaxis, :]
+        new_vf.constant_coeff = unumpy.nominal_values([refined_params.get('constants', 0)])
+        new_vf.proportional_coeff = unumpy.nominal_values([refined_params.get('proportional', 0)])
+
+        self.refined_model = new_vf
+        return new_vf
 
     def make_fit_param_raveler(
             self,
