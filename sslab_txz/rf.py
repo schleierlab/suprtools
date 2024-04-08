@@ -718,24 +718,27 @@ class VectorFittingFancy(rf.VectorFitting):
         freq_min, freq_max = self.network.frequency.f[[0, -1]]
         freq_range = np.linspace(freq_min, freq_max, 5001)
         offset_freq_range = freq_to_xunit(freq_range)
-        model_response = self.get_model_response(0, 0, freqs=freq_range)
 
         ax.plot(
             freq_to_xunit(self.network.frequency.f),
             converter(self.network.s.flatten()),
             **data_plot_kw,
         )
-        ax.plot(
-            offset_freq_range,
-            converter(model_response),
-            **model_plot_kw,
-        )
-        if self.refined_model is not None:
+
+        if self.refined_model is None:
+            model_response = self.get_model_response(0, 0, freqs=freq_range)
+            ax.plot(
+                offset_freq_range,
+                converter(model_response),
+                **model_plot_kw,
+            )
+        else:
             refined_response = self.refined_model.get_model_response(0, 0, freqs=freq_range)
 
             if refined_plot_kw is None:
                 refined_plot_kw = copy.copy(model_plot_kw)
-                refined_plot_kw['color'] = 'green'
+                refined_plot_kw['color'] = 'red'
+                refined_plot_kw['alpha'] = 0.5
                 refined_plot_kw['label'] = \
                     f'Refined (RMS error {self.refined_model.get_rms_error(0, 0):.3E})'
             ax.plot(
@@ -786,23 +789,24 @@ class VectorFittingFancy(rf.VectorFitting):
         scaled_sparam = self.network.s.flatten() * scale
 
         ax.plot(
-            x_converter(scaled_model_response),
-            y_converter(scaled_model_response),
-            **model_plot_kw,
-        )
-        ax.plot(
             x_converter(scaled_sparam),
             y_converter(scaled_sparam),
             **data_plot_kw,
         )
-
-        if self.refined_model is not None:
+        if self.refined_model is None:
+            ax.plot(
+                x_converter(scaled_model_response),
+                y_converter(scaled_model_response),
+                **model_plot_kw,
+            )
+        else:
             refined_response_scaled = scale \
                 * self.refined_model.get_model_response(0, 0, freqs=self.network.frequency.f)
 
             if refined_plot_kw is None:
                 refined_plot_kw = copy.copy(model_plot_kw)
-                refined_plot_kw['color'] = 'green'
+                refined_plot_kw['color'] = 'red'
+                refined_plot_kw['alpha'] = 0.7
             ax.plot(
                 x_converter(refined_response_scaled),
                 y_converter(refined_response_scaled),
@@ -1258,11 +1262,12 @@ def fit_mode(network, center_ghz, span_ghz, **vf_kwargs):
         n_poles_real=0,
         **vf_kwargs,
     )
+    vf.refine_fit()
     return vf
 
 
 def test_a_fit(network, center_ghz, span_ghz, **vf_kwargs):
     vf = fit_mode(network, center_ghz, span_ghz, **vf_kwargs)
-    vf.print_poles(freq_prec=9)
+    vf.print_refined_poles()
     vf.visualize()
     return vf
