@@ -2,7 +2,7 @@ import copy
 import datetime
 import functools
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Callable, Literal, Optional
 
 import h5py
 import matplotlib.gridspec
@@ -908,7 +908,6 @@ class VectorFittingFancy(rf.VectorFitting):
             np.imag(poles[~real_mask]),
             np.real(residues[real_mask]),
             np.real(residues[~real_mask]),
-            np.imag(residues[real_mask]),
             np.imag(residues[~real_mask]),
             constants[constants != 0],
             props[props != 0],
@@ -1002,11 +1001,11 @@ class VectorFittingFancy(rf.VectorFitting):
             *,
             norm: bool | float = True,
             break_off_real_poles: bool,
-            complex_values: bool) -> callable:
+            complex_values: bool) -> Callable:
         '''
-        Create a function that takes in the canonical Vector Fit parameter
-        ordering (defined in `unravel_fit_params`) and returns them grouped in a
-        dict.
+        Create a function that takes in the canonical Vector Fit
+        parameter ordering (defined in `unravel_fit_params`) and returns
+        them grouped in a dict.
 
         Parameters
         ----------
@@ -1020,18 +1019,18 @@ class VectorFittingFancy(rf.VectorFitting):
         Returns
         -------
         dict
-            with keys {'poles', 'residues'} and optionally also {'constants', 'proportionals'}.
-            If `break_off_real_poles` is true, the values for the keys
-            {'poles', 'residues'} are themselves dicts with keys {'real', 'complex'}.
-            In all cases the ordering of the poles is the same as that of the residues.
+            with keys {'poles', 'residues'} and optionally also
+            {'constants', 'proportionals'}. If `break_off_real_poles` is
+            true, the values for the keys {'poles', 'residues'} are
+            themselves dicts with keys {'real', 'complex'}. In all cases
+            the ordering of the poles is the same as that of the residues.
         '''
         norm_val = self._get_norm(norm)
 
-        n_poles_principal = n_poles_real + n_poles_cmplx
         residues_idx = n_poles_real + 2 * n_poles_cmplx
-        residues_end_idx = residues_idx + 2 * n_poles_principal
+        residues_end_idx = 2 * residues_idx
 
-        expected_nargs = 4 * n_poles_principal - n_poles_real \
+        expected_nargs = residues_end_idx \
             + int(constant_coeff) + int(proportional_coeff)
 
         def fit_param_raveler(args):
@@ -1039,22 +1038,31 @@ class VectorFittingFancy(rf.VectorFitting):
             if len(args) != expected_nargs:
                 raise ValueError
 
-            poles_real = norm_val * args[:n_poles_real]
-            poles_cmplx_parts = norm_val * args[n_poles_real:residues_idx]
-            residues_parts = norm_val * args[residues_idx:residues_end_idx]
+            def split_real_imag(arr):
+                if len(arr) != residues_idx:
+                    raise ValueError
+
+                return (
+                    arr[:n_poles_real],
+                    arr[n_poles_real:n_poles_real+n_poles_cmplx],
+                    arr[n_poles_real+n_poles_cmplx:],
+                )
+
+            poles_real, poles_cmplx_real, poles_cmplx_imag = \
+                split_real_imag(norm_val * args[:residues_idx])
+            residues_real, residues_cmplx_real, residues_cmplx_imag = \
+                split_real_imag(
+                    norm_val * args[residues_idx:residues_end_idx],
+                )
             misc_terms_normed = iter(args[residues_end_idx:])
-
-            poles_cmplx_real = poles_cmplx_parts[:n_poles_cmplx]
-            poles_cmplx_imag = poles_cmplx_parts[n_poles_cmplx:]
-
-            residues_realparts = residues_parts[:n_poles_principal]
-            residues_imagparts = residues_parts[n_poles_principal:]
 
             retval = {
                 'poles': {
                     'real': {
                         'real': poles_real,
-                        'imag': np.zeros_like(poles_real),
+                        'imag': 0 * poles_real,
+                        # like zeros-like, but also handles case
+                        # where poles_real contains uncertain values
                     },
                     'complex': {
                         'real': poles_cmplx_real,
@@ -1063,12 +1071,12 @@ class VectorFittingFancy(rf.VectorFitting):
                 },
                 'residues': {
                     'real': {
-                        'real': residues_realparts[:n_poles_real],
-                        'imag': residues_imagparts[:n_poles_real],
+                        'real': residues_real,
+                        'imag': 0 * residues_real,
                     },
                     'complex': {
-                        'real': residues_realparts[n_poles_real:],
-                        'imag': residues_imagparts[n_poles_real:],
+                        'real': residues_cmplx_real,
+                        'imag': residues_cmplx_imag,
                     },
                 },
             }
@@ -1227,7 +1235,7 @@ class VectorFittingFancy(rf.VectorFitting):
                 + 1 / (s - np.conj(params['poles']['complex']))
             )
 
-            realpole_res_imagpart_grad = 1j * realpole_res_realpart_grad
+            # realpole_res_imagpart_grad = 1j * realpole_res_realpart_grad
             cmplxpole_res_imagpart_grad = 1j * (
                 1 / (s - params['poles']['complex'])
                 - 1 / (s - np.conj(params['poles']['complex']))
@@ -1239,7 +1247,7 @@ class VectorFittingFancy(rf.VectorFitting):
                 cmplxpole_imagpart_grad,
                 realpole_res_realpart_grad,
                 cmplxpole_res_realpart_grad,
-                realpole_res_imagpart_grad,
+                # realpole_res_imagpart_grad,
                 cmplxpole_res_imagpart_grad,
             ]
             if constant_coeff:
