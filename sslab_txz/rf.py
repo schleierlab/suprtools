@@ -545,7 +545,9 @@ class VectorFittingFancy(rf.VectorFitting):
         print(f'{"Freq (GHz)":16}{"FWHM":^24}')
         for freq, fwhm in zip(self.refined_resonances, self.refined_fwhms):
             thousands = np.log10(fwhm.n) // 3
-            if thousands == 3:
+            if thousands == 4:
+                unit = 'THz'
+            elif thousands == 3:
                 unit = 'GHz'
             elif thousands == 2:
                 unit = 'MHz'
