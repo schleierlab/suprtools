@@ -410,8 +410,18 @@ class WideScanData():
             wide_scan_datas.append(metadata_record)
 
         metadata = [d.metadata for d in wide_scan_datas]
-        stitched_s11 = functools.reduce(rf.network.stitch, (d.s11 for d in wide_scan_datas))
-        stitched_s21 = functools.reduce(rf.network.stitch, (d.s21 for d in wide_scan_datas))
+        stitched_s11 = WideScanNetwork(
+            functools.reduce(
+                rf.network.stitch,
+                (d.s11 for d in wide_scan_datas),
+            ),
+        )
+        stitched_s21 = WideScanNetwork(
+            functools.reduce(
+                rf.network.stitch,
+                (d.s21 for d in wide_scan_datas),
+            ),
+        )
         stitched_s11.drop_non_monotonic_increasing()
         stitched_s21.drop_non_monotonic_increasing()
 
