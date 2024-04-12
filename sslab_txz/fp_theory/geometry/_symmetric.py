@@ -120,8 +120,8 @@ class SymmetricCavityGeometry(CavityGeometry):
         match resonance_ratio:
             case (int(num), int(denom)):
                 resonance_frac = Fraction(num, denom)
-            case Fraction(frac):
-                resonance_frac = Fraction(frac)  # redundant `Fraction` for vscode type analysis
+            case Fraction() as frac:
+                resonance_frac = frac
             case float(x):
                 resonance_frac = Fraction(x).limit_denominator(10)
             case None:
