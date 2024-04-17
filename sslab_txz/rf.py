@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Callable, Literal, Optional
 
 import h5py
+import lmfit
 import matplotlib.gridspec
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,6 +14,7 @@ import scipy.signal
 import skrf as rf
 import uncertainties
 from matplotlib.ticker import MultipleLocator
+from numpy.typing import NDArray
 from scipy.constants import pi
 from skrf.network import Network
 from tqdm import tqdm
@@ -129,13 +131,13 @@ class ScanDataFilter():
     def latex_repr(self):
         inv = '^{-1}'
         if self.high_pass_order == 0:
-            fclp = r'f_{c, \mathrm{LP}}'
+            fclp = R'f_{c, \mathrm{LP}}'
             return f'${fclp}{inv} = {1e-6/self.fc_lp:.3f}$ MHz'
         if self.low_pass_order == 0:
-            fchp = r'f_{c, \mathrm{HP}}'
+            fchp = R'f_{c, \mathrm{HP}}'
             return f'${fchp}{inv} = {1e-6/self.fc_hp:.3f}$ MHz'
 
-        fchlp = r'f_{c, \mathrm{HP,LP}}'
+        fchlp = R'f_{c, \mathrm{HP,LP}}'
         return f'${fchlp}{inv} = {1e-6/self.fc_hp:.3f}, {1e-6/self.fc_hp:.3f}$ MHz'
 
     @staticmethod
@@ -1291,3 +1293,145 @@ def test_a_fit(network, center_ghz, span_ghz, **vf_kwargs):
     vf.print_refined_poles()
     vf.visualize()
     return vf
+
+
+class Ringdown():
+    functional_form = (
+        R'$\tilde{s}_0\, \exp(-\frac{1}{2}\kappa t-i\Delta\omega t) '
+        R'+ \tilde{s}_\infty$'
+    )
+
+    s21: NDArray[np.complex128]
+    t: NDArray[np.float64]
+    frequency: float
+
+    def __init__(self, h5path: str):
+        with h5py.File(h5path, 'r') as f:
+            self.s21 = f['data/s_params/s21/real'][:] + 1j * f['data/s_params/s21/imag'][:]
+            self.t = f['data/times'][:]
+            self.frequency = f.attrs['frequency']
+
+    @staticmethod
+    def ringdown_shape(t, a0, phi0, fwhm, delta_f, offset_re, offset_im):
+        '''
+        delta_f: f - f0 of the resonance
+        '''
+        offset_cmplx = offset_re + 1j * offset_im
+        a0_cmplx = a0 * np.exp(1j * phi0)
+
+        shifted_pole = -2 * pi * (0.5 * fwhm + 1j * delta_f)
+        return offset_cmplx + a0_cmplx * np.exp(shifted_pole * t)
+
+    def fit_model(self):
+        self.model = lmfit.Model(self.ringdown_shape)
+
+        guess_offset = self.s21[-10:].mean()
+        guess_prefactor = self.s21[0] - guess_offset
+
+        lookahead_ind = np.searchsorted(self.t, 0.1 * self.t[-1])
+        lookahead_time = self.t[lookahead_ind]
+        lookahead_s21 = self.s21[lookahead_ind] - guess_offset
+        guess_fwhm = np.log(np.abs(guess_prefactor / lookahead_s21)) \
+            / lookahead_time / pi
+
+        params = self.model.make_params(
+            a0=dict(
+                value=np.abs(guess_prefactor),
+                min=0.5*np.abs(guess_prefactor),
+                max=2*np.abs(guess_prefactor),
+            ),
+            phi0=dict(
+                value=np.angle(guess_prefactor),
+                min=0,
+                max=7,
+            ),
+            fwhm=dict(value=guess_fwhm, min=1, max=8e+3),
+            delta_f=dict(value=0, min=-5e+3, max=+5e+3),
+            offset_re=np.real(guess_offset),
+            offset_im=np.imag(guess_offset),
+        )
+
+        self.s21_fit = self.s21[10:]
+        self.t_fit = self.t[10:]
+        self.fit = self.model.fit(
+            self.s21_fit,
+            params=params,
+            t=self.t_fit,
+        )
+
+    def visualize(self, onering: bool = False):
+        fig, axs = plt.subplot_mosaic(
+            [
+                ['db', 'reim'],
+                ['deg', 'reim'],
+            ],
+            layout='constrained',
+            figsize=(9.6, 4),
+        )
+        axs['reim'].set_aspect(1)
+        axs['reim'].set_box_aspect(1)
+
+        axs['db'].plot(
+            1e+6 * self.t,
+            rf.complex_2_db(self.s21),
+            label=fr'$\omega/2\pi$ = {self.frequency / 1e+9:.9f} GHz',
+        )
+
+        axs['deg'].plot(
+            1e+6 * self.t,
+            np.unwrap(rf.complex_2_degree(self.s21), period=360),
+        )
+
+        axs['reim'].plot(
+            *rf.complex_2_reim(1e+3 * self.s21),
+        )
+
+        if hasattr(self, 'fit') and hasattr(self.fit, 'uvars'):
+            model_val = self.fit.eval(t=self.t_fit)
+            axs['db'].plot(
+                1e+6 * self.t_fit,
+                rf.complex_2_db(model_val),
+                label=(
+                    fr'$\kappa/2\pi = {self.fit.uvars["fwhm"]:SL}$ Hz'
+                )
+            )
+            axs['deg'].plot(
+                1e+6 * self.t_fit,
+                np.unwrap(rf.complex_2_degree(model_val), period=360),
+                label=(
+                    R'$\Delta\omega \equiv \omega - \omega_0 = '
+                    fr'2\pi \times {self.fit.uvars["delta_f"]:SL}$ Hz'
+                ),
+            )
+
+            axs['reim'].plot(
+                *rf.complex_2_reim(1e+3 * model_val),
+                label=Ringdown.functional_form,
+            )
+
+        axs['db'].legend(fontsize='x-small')
+        axs['deg'].legend(fontsize='x-small')
+        axs['reim'].legend(fontsize='x-small')
+
+        axs['db'].set_ylabel('$|S_{21}|$ [dB]')
+        axs['deg'].set_ylabel(R'$\angle S_{21}$ [deg]')
+        axs['deg'].set_xlabel(R'Time [$\mu$s]')
+        axs['reim'].set_xlabel(R'$10^3 \times \operatorname{Re} S_{21}$')
+        axs['reim'].set_ylabel(R'$10^3 \times \operatorname{Im} S_{21}$')
+
+        for ax in axs.values():
+            sslab_style(ax)
+
+        if onering:
+            onering_path = Path(__file__).parent / 'img/onering_wikipedia.png'
+            with open(onering_path, 'rb') as file:
+                im = matplotlib.image.imread(file)
+            ax_ring = fig.add_axes((0, 0, 1, 1))
+            ax_ring.imshow(
+                im,
+                alpha=0.1,
+                zorder=-3,
+            )
+            ax_ring.axis('off')
+
+        return fig, axs
