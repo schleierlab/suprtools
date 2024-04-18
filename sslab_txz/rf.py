@@ -1312,7 +1312,15 @@ class Ringdown():
             self.frequency = f.attrs['frequency']
 
     @staticmethod
-    def ringdown_shape(t, a0, phi0, fwhm, delta_f, offset_re, offset_im):
+    def ringdown_shape(
+            t,
+            a0,
+            phi0,
+            fwhm,
+            delta_f,
+            offset_re,
+            offset_im,
+    ):
         '''
         delta_f: f - f0 of the resonance
         '''
@@ -1334,6 +1342,7 @@ class Ringdown():
         guess_fwhm = np.log(np.abs(guess_prefactor / lookahead_s21)) \
             / lookahead_time / pi
 
+        s21_scale = 0.5 * np.max(np.abs(self.s21 - self.s21.mean()))
         params = self.model.make_params(
             a0=dict(
                 value=np.abs(guess_prefactor),
@@ -1342,13 +1351,21 @@ class Ringdown():
             ),
             phi0=dict(
                 value=np.angle(guess_prefactor),
-                min=0,
-                max=7,
+                min=-2*pi,
+                max=2*pi,
             ),
             fwhm=dict(value=guess_fwhm, min=1, max=8e+3),
             delta_f=dict(value=0, min=-5e+3, max=+5e+3),
-            offset_re=np.real(guess_offset),
-            offset_im=np.imag(guess_offset),
+            offset_re=dict(
+                value=np.real(guess_offset),
+                min=np.real(guess_offset)-s21_scale,
+                max=np.real(guess_offset)+s21_scale,
+            ),
+            offset_im=dict(
+                value=np.imag(guess_offset),
+                min=np.imag(guess_offset)-s21_scale,
+                max=np.imag(guess_offset)+s21_scale,
+            ),
         )
 
         self.s21_fit = self.s21[10:]
