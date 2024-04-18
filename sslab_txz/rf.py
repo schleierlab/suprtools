@@ -1368,8 +1368,9 @@ class Ringdown():
             ),
         )
 
-        self.s21_fit = self.s21[10:]
-        self.t_fit = self.t[10:]
+        fit_range_trunc_ind = 0
+        self.s21_fit = self.s21[fit_range_trunc_ind:]
+        self.t_fit = self.t[fit_range_trunc_ind:]
         self.fit = self.model.fit(
             self.s21_fit,
             params=params,
