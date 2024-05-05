@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Mapping, Optional, Self
+from typing import Iterable, Mapping, Optional, Self
 
 import h5py
 import lmfit
@@ -10,6 +10,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import skrf as rf
+from lmfit import Parameters
 from numpy.typing import ArrayLike, NDArray
 from scipy.constants import pi
 
@@ -104,13 +105,12 @@ class RingdownSet():
     def __len__(self) -> int:
         return len(self.s21)
 
-
-class Ringdown(RingdownSet):
-    def fit_model(self, init_params=dict()):
-        s21 = self.s21[0]
-
-        self.model = lmfit.Model(self.ringdown_shape)
-
+    def _init_params_from_s21(
+            self,
+            s21: NDArray,
+            suffix: Optional[str] = None,
+            init_params: Mapping[str, Mapping] = dict(),
+    ) -> Parameters:
         guess_offset = s21[-10:].mean()
         guess_prefactor = s21[0] - guess_offset
 
@@ -121,6 +121,8 @@ class Ringdown(RingdownSet):
             / lookahead_time / pi
 
         s21_scale = 0.5 * np.max(np.abs(s21 - s21.mean()))
+
+        full_suffix = '' if suffix is None else f'_{suffix}'
         default_init_params = dict(
             a0=dict(
                 value=np.abs(guess_prefactor),
@@ -145,7 +147,53 @@ class Ringdown(RingdownSet):
                 max=np.imag(guess_offset)+s21_scale,
             ),
         )
-        params = self.model.make_params(**(default_init_params | init_params))
+        full_init_params = default_init_params | init_params
+
+        params = Parameters()
+        for param_name, param_spec in full_init_params.items():
+            params.add(
+                param_name + full_suffix,
+                **param_spec,
+            )
+        return params
+
+    def fit_model(self, shared_params: Iterable[str] = ['fwhm', 'offset_re', 'offset_im']):
+        fit_params: Parameters = sum(
+            (self._init_params_from_s21(s21i, str(i)) for i, s21i in enumerate(self.s21)),
+            start=Parameters(),
+        )
+
+        # constrain shared params to same value
+        for shared_base_param in shared_params:
+            for i in range(1, len(self)):
+                fit_params[f'{shared_base_param}_{i}'].expr = f'{shared_base_param}_0'
+
+        def multi_objective(params: Parameters, t: NDArray, s21s: NDArray) -> NDArray:
+            residual_arr = [
+                s21i - self.ringdown_shape(
+                    t,
+                    params[f'a0_{i}'].value,
+                    params[f'phi0_{i}'].value,
+                    params[f'fwhm_{i}'].value,
+                    params[f'delta_f_{i}'].value,
+                    params[f'offset_re_{i}'].value,
+                    params[f'offset_im_{i}'].value,
+                )
+                for i, s21i in enumerate(s21s)
+            ]
+            return np.array(residual_arr).flatten()
+
+        return lmfit.minimize(multi_objective, fit_params, args=(self.t, self.s21))
+
+    def visualize(self, onering: bool = False):
+        raise NotImplementedError
+
+
+class Ringdown(RingdownSet):
+    def fit_model(self, init_params=dict()):
+        s21 = self.s21[0]
+        self.model = lmfit.Model(self.ringdown_shape)
+        params = self._init_params_from_s21(s21, init_params=init_params)
 
         fit_range_trunc_ind = 0
         self.s21_fit = s21[fit_range_trunc_ind:]
