@@ -150,7 +150,7 @@ class RingdownSet():
                 max=2*pi,
             ),
             fwhm=dict(value=guess_fwhm, min=1, max=8e+3),
-            delta_f=dict(value=0, min=-5e+3, max=+5e+3),
+            delta_f=dict(value=0, min=-10e+3, max=+10e+3),
             offset_re=dict(
                 value=np.real(guess_offset),
                 min=np.real(guess_offset)-s21_scale,
