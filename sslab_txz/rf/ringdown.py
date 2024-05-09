@@ -35,7 +35,7 @@ class RingdownSet():
             s21: ArrayLike,
             frequency: float,
             temperatures: Optional[Mapping[str, float]],
-            stage_positions: Mapping[str, float],
+            stage_positions: Optional[Mapping[str, float]],
     ):
         '''
         Parameters
@@ -45,7 +45,11 @@ class RingdownSet():
         s21: arraylike, (n, m) or (m,)
         frequency: float
         temperatures: Mapping[str, float], optional
-        stage_positions: Mapping[str, float]
+            Temperatures, measured as a mapping from measurement name
+            to temperature in kelvins.
+        stage_positions: Mapping[str, float], optional
+            Locations of the stages as a mapping from stage name
+            to position in meters.
         '''
         self.t = np.array(t)
         self.s21 = np.array(s21).reshape(-1, len(self.t))
@@ -61,8 +65,10 @@ class RingdownSet():
             Path to the H5 file
         '''
         with h5py.File(h5path, 'r') as f:
-            s21 = f['data/s_params/s21/real'][:] \
+            s21: NDArray[np.complex128] = f['data/s_params/s21/real'][:] \
                 + 1j * f['data/s_params/s21/imag'][:]
+            if len(s21.shape) == 1:
+                s21 = s21.reshape(1, -1)
             t = f['data/times'][:]
             frequency = f.attrs['frequency']
             temperatures = {
