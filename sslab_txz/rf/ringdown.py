@@ -107,8 +107,15 @@ class RingdownSet():
         shifted_pole = -2 * pi * (0.5 * fwhm + 1j * delta_f)
         return offset_cmplx + a0_cmplx * np.exp(shifted_pole * t)
 
+    def mean(self) -> Ringdown:
+        return Ringdown(
+            self.t, self.s21.mean(axis=0), self.frequency, None, self.stage_positions,
+        )
+
     def __getitem__(self, key: int) -> Ringdown:
-        return Ringdown(self.t, self.s21[key], self.frequency, None, self.stage_positions)
+        return Ringdown(
+            self.t, self.s21[key], self.frequency, None, self.stage_positions,
+        )
 
     def __len__(self) -> int:
         return len(self.s21)
