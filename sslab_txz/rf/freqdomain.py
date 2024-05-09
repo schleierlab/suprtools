@@ -13,6 +13,7 @@ import scipy.signal
 import skrf as rf
 import uncertainties
 from matplotlib.ticker import MultipleLocator
+from numpy.typing import NDArray
 from scipy.constants import pi
 from skrf.network import Network
 from tqdm import tqdm
@@ -326,14 +327,23 @@ class WideScanNetwork(rf.Network):
 
 
 class WideScanData():
+    s11: Optional[WideScanNetwork]
+    s21: Optional[WideScanNetwork]
+
     def __init__(self, s11, s21, metadata):
         self.s11 = s11
         self.s21 = s21
         self.metadata = metadata
 
     @staticmethod
-    def _get_s_param(f: h5py.File, param: Literal['s11', 's21']):
+    def _get_s_param(
+            f: h5py.File,
+            param: Literal['s11', 's21']) -> Optional[NDArray[np.complex128]]:
+
         datapath = f'data/s_params/{param}'
+        if datapath not in f:
+            return None
+
         real_part = np.array(f.get(f'{datapath}/real'))
         imag_part = np.array(f.get(f'{datapath}/imag'))
         return real_part + 1j*imag_part
@@ -375,16 +385,21 @@ class WideScanData():
             freq_obj, s11_arr, s21_arr, metadata_pt = \
                 cls._load_window_data(f, sample_temps=sample_temps)
 
-        s11_net = WideScanNetwork(
-            frequency=freq_obj,
-            s=s11_arr,
-            name=f'{network_name}, S11',
-        )
-        s21_net = WideScanNetwork(
-            frequency=freq_obj,
-            s=s21_arr,
-            name=f'{network_name}, S21',
-        )
+        s11_net = None
+        if s11_arr is not None:
+            s11_net = WideScanNetwork(
+                frequency=freq_obj,
+                s=s11_arr,
+                name=f'{network_name}, S11',
+            )
+
+        s21_net = None
+        if s21_arr is not None:
+            s21_net = WideScanNetwork(
+                frequency=freq_obj,
+                s=s21_arr,
+                name=f'{network_name}, S21',
+            )
 
         names: tuple[str, ...]
         if sample_temps:
