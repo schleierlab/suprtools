@@ -1,20 +1,22 @@
 # for forward references; needed until python 3.13
 from __future__ import annotations
 
-from pathlib import Path
+import importlib.resources
 from typing import Iterable, Mapping, Optional, Self
 
 import h5py
 import lmfit
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import skrf as rf
 from lmfit import Parameters
 from numpy.typing import ArrayLike, NDArray
+from PIL import Image
 from scipy.constants import pi
 
 from sslab_txz.plotting import sslab_style
+
+from . import img
 
 
 class RingdownSet():
@@ -272,15 +274,20 @@ class Ringdown(RingdownSet):
             sslab_style(ax)
 
         if onering:
-            onering_path = Path(__file__).parent.parent / 'img/onering_wikipedia.png'
-            with open(onering_path, 'rb') as file:
-                im = matplotlib.image.imread(file)
-            ax_ring = fig.add_axes((0, 0, 1, 1))
-            ax_ring.imshow(
-                im,
-                alpha=0.1,
-                zorder=-3,
-            )
-            ax_ring.axis('off')
+            imfile = importlib.resources.files(img) / 'onering_wikipedia.png'
+
+            # imfile (Traversable) can be passed to open()
+            # but typeshed annotation for open() doesn't support Traversable
+            with open(imfile, 'rb') as fp:  # type: ignore
+                im = Image.open(fp)
+                ax_ring = fig.add_axes((0, 0, 1, 1))
+
+                # must stay in because `im` is lazily eval'd
+                ax_ring.imshow(
+                    im,
+                    alpha=0.1,
+                    zorder=-3,
+                )
+                ax_ring.axis('off')
 
         return fig, axs
