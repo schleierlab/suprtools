@@ -264,7 +264,7 @@ class Ringdown(RingdownSet):
                 np.unwrap(rf.complex_2_degree(model_val), period=360),
                 label=(
                     R'$\Delta\omega \equiv \omega - \omega_0 = '
-                    fr'2\pi \times {self.fit.uvars["delta_f"]:SL}$ Hz'
+                    fr'{self.fit.uvars["delta_f"]:SL} \times 2\pi$ Hz'
                 ),
             )
 
