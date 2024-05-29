@@ -1,7 +1,7 @@
 {
     "editor.trimAutoWhitespace": true,
     "editor.rulers": [
-        72, 79, 100
+        72, 79, 88, 100
     ],
     "editor.codeActionsOnSave": {
         "source.fixAll": "explicit",
