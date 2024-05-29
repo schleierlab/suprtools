@@ -2,7 +2,7 @@ import copy
 import datetime
 import functools
 from pathlib import Path
-from typing import Callable, Literal, Optional
+from typing import Callable, Literal, Optional, Self
 
 import h5py
 import matplotlib.gridspec
@@ -512,11 +512,16 @@ class WideScanData():
         return WideScanData(s11, s21, metadata)
 
 
+RealImagDict = dict[Literal['real', 'imag'], NDArray]
+RefinedParamsDict = dict[Literal['poles', 'residues', 'constants'], RealImagDict]
+
+
 class VectorFittingFancy(rf.VectorFitting):
+    refined_fit_params: Optional[RefinedParamsDict] = None
+    refined_model: Optional[Self] = None
+
     def __init__(self, network: Network):
         super().__init__(network)
-        self.refined_fit_params = None
-        self.refined_model: Optional[VectorFittingFancy] = None
 
     @staticmethod
     def _setup_iq_ax(ax, scale_str):
@@ -560,6 +565,46 @@ class VectorFittingFancy(rf.VectorFitting):
         assert self.refined_fit_params is not None
         pole_imag_parts = self.refined_fit_params['poles']['imag']
         return pole_imag_parts / (2 * pi)
+
+    def closest_pole_uparams(self, frequency: float, frequency_err_max: float = 400e+3):
+        '''
+        Parameters of the low-frequency-uncertainty partial fraction
+        closest in frequency to a specified value. A refined fit must
+        already exist.
+
+        Parameters
+        ----------
+        frequency: float
+            Nominal frequency to center search around
+        frequency_err_max: float, optional
+            Maximum frequency error for a partial fraction contribution
+            to be considered.
+
+        Returns
+        -------
+        tuple[ufloat, ufloat, ufloat, ufloat]
+            Re(p), Im(p), Re(r), Im(r), where p and r are respectively
+            the pole and residue corresponding to the partial fraction
+            in the fit closest to the specified frequency.
+        '''
+        if self.refined_fit_params is None:
+            raise ValueError
+
+        localized_mode_mask = (unumpy.std_devs(self.refined_resonances) < frequency_err_max)
+        nominal_freqs = unumpy.nominal_values(self.refined_resonances)
+        masked_distances = np.where(
+            localized_mode_mask,
+            np.abs(nominal_freqs - frequency),
+            np.inf,
+        )
+        mode_ind = np.argmin(masked_distances)
+
+        return (
+            self.refined_fit_params['poles']['real'][mode_ind],
+            self.refined_fit_params['poles']['imag'][mode_ind],
+            self.refined_fit_params['residues']['real'][mode_ind],
+            self.refined_fit_params['residues']['imag'][mode_ind],
+        )
 
     def print_poles(self, freq_prec=3, fwhm_prec=4):
         print('Freq (GHz)\tFWHM (MHz)')
