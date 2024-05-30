@@ -1,7 +1,8 @@
-from typing import Mapping, Optional, Self
+from typing import Mapping, Optional, Self, cast
 
 import h5py
 import numpy as np
+from matplotlib import pyplot as plt
 from numpy.typing import ArrayLike, NDArray
 
 
@@ -39,6 +40,10 @@ class CWMeasurement:
         self.temperatures = temperatures
         self.stage_positions = stage_positions
 
+    @property
+    def f_sample(self):
+        return 1 / (self.t[1] - self.t[0])
+
     @classmethod
     def from_h5(cls, h5path: str) -> Self:
         '''
@@ -75,3 +80,30 @@ class CWMeasurement:
             }
 
         return cls(t, s21, frequency, temperatures, stage_positions)
+
+    def plot_power_spectrum(
+            self, ax: Optional[plt.Axes] = None, scale: float = 1, **kwargs):
+        '''
+        Parameters
+        ----------
+        scale: float
+            Scale by which to multiply FFT. This is the square root of
+            the scaling factor ultimately on the y-axis, since the power
+            spectrum goes as FFT squared. The scale converts from S21
+            units U to a desired unit V of choice (and should thus be
+            expressed in units of V/U).
+
+        '''
+        if ax is None:
+            _, ax = plt.subplots(layout='constrained')
+            ax = cast(plt.Axes, ax)
+            ax.set_xlabel('Frequency [Hz]')
+            ax.set_ylabel('Power spectral density [U$^2$/Hz]')
+
+        fft = np.fft.fft(self.s21, axis=-1, norm='ortho') / np.sqrt(self.f_sample)
+
+        ax.semilogy(
+            np.fft.fftshift(np.fft.fftfreq(len(self.t)) * self.f_sample),
+            np.fft.fftshift(np.mean(np.abs(scale * fft)**2, axis=0)),
+            **kwargs,
+        )
