@@ -13,6 +13,8 @@ from lmfit import Parameters
 from numpy.typing import NDArray
 from PIL import Image
 from scipy.constants import pi
+from tqdm import tqdm
+from uncertainties import UFloat
 
 from sslab_txz.plotting import sslab_style
 from sslab_txz.rf.cw import CWMeasurement
@@ -142,6 +144,19 @@ class RingdownSet(CWMeasurement):
                 **param_spec,
             )
         return params
+
+    def fit_fwhms(self, init_params=dict()):
+        def extract_fwhm(ringdown: Ringdown):
+            fit = ringdown.fit_model(model='abssq', init_params=init_params)
+            try:
+                fit = cast(lmfit.minimizer.MinimizerResult, fit)
+                return cast(UFloat, fit.uvars['fwhm'])
+            except AttributeError:
+                return None
+
+        self_iter = tqdm(self) if len(self) > 500 else self
+        maybe_fwhms = [extract_fwhm(rd) for rd in self_iter]
+        return [maybe_fwhm for maybe_fwhm in maybe_fwhms if maybe_fwhm is not None]
 
     def fit_model(self, shared_params: Iterable[str] = ['fwhm', 'offset_re', 'offset_im']):
         fit_params: Parameters = sum(
