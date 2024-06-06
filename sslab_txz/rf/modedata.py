@@ -27,6 +27,7 @@ class ModeParams:
         self.params_arr = np.rec.fromrecords(
             mode_records,
             names=['pole_r', 'pole_i', 'res_r', 'res_i'],
+            formats=None,  # workaround for https://github.com/numpy/numpy/issues/26376
         )
 
     def __getitem__(self, key):
