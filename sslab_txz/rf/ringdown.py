@@ -50,10 +50,16 @@ class RingdownSet(CWMeasurement):
             self.t, self.s21.mean(axis=0), self.frequency, None, self.stage_positions,
         )
 
-    def __getitem__(self, key: int) -> Ringdown:
-        return Ringdown(
-            self.t, self.s21[key], self.frequency, None, self.stage_positions,
-        )
+    def __getitem__(self, key: int | slice) -> RingdownSet:
+        match key:
+            case int(i):
+                return Ringdown(
+                    self.t, self.s21[i], self.frequency, None, self.stage_positions,
+                )
+            case slice() as s:
+                return RingdownSet(
+                    self.t, self.s21[s], self.frequency, None, self.stage_positions,
+                )
 
     def __len__(self) -> int:
         return len(self.s21)
