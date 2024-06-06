@@ -17,7 +17,7 @@ from numpy.typing import NDArray
 from scipy.constants import pi
 from skrf.network import Network
 from tqdm import tqdm
-from uncertainties import unumpy
+from uncertainties import ufloat, unumpy
 
 from sslab_txz.plotting import sslab_style
 
@@ -325,6 +325,19 @@ class WideScanNetwork(rf.Network):
 
         return fig, axs
 
+    def fit_network(self, n_poles_cmplx: int):
+        vf = VectorFittingFancy(self)
+        vf.vector_fit(n_poles_real=0, n_poles_cmplx=n_poles_cmplx)
+        vf.refine_fit()
+        return vf
+
+    def fit_narrow_mode(self, n_poles_cmplx: int, frequency_err_max: float = 400e+3):
+        try:
+            vf = self.fit_network(n_poles_cmplx)
+            return vf.closest_pole_uparams(self.frequency.center, frequency_err_max)
+        except RuntimeError:
+            return (ufloat(np.nan, np.nan),) * 4
+
 
 class WideScanData():
     s11: Optional[WideScanNetwork]
@@ -566,6 +579,17 @@ class VectorFittingFancy(rf.VectorFitting):
         pole_imag_parts = self.refined_fit_params['poles']['imag']
         return pole_imag_parts / (2 * pi)
 
+    @property
+    def refined_residue_mags(self):
+        if self.refined_fit_params is None:
+            raise RuntimeError
+
+        residue_mag_angular = unumpy.sqrt(
+            self.refined_fit_params['residues']['real']**2
+            + self.refined_fit_params['residues']['imag']**2
+        )
+        return residue_mag_angular / (2 * pi)
+
     def closest_pole_uparams(self, frequency: float, frequency_err_max: float = 400e+3):
         '''
         Parameters of the low-frequency-uncertainty partial fraction
@@ -616,25 +640,34 @@ class VectorFittingFancy(rf.VectorFitting):
             pole_fwhm_str = pole_fwhm_fmt_str.format(-2 * np.real(pole) / (2 * pi * 1e6))
             print(f'{pole_freq_str}\t\t{pole_fwhm_str}')
 
-    def print_refined_poles(self):
-        print(f'{"Freq (GHz)":16}{"FWHM":^24}')
-        for freq, fwhm in zip(self.refined_resonances, self.refined_fwhms):
-            thousands = np.log10(fwhm.n) // 3
-            if thousands == 4:
-                unit = 'THz'
-            elif thousands == 3:
-                unit = 'GHz'
-            elif thousands == 2:
-                unit = 'MHz'
-            elif thousands == 1:
-                unit = 'kHz'
-            elif thousands <= 0:
-                unit = 'Hz'
-                thousands = 0
+    @staticmethod
+    def _format_ufreq(ufreq):
+        thousands = np.log10(ufreq.n) // 3
+        if thousands == 4:
+            unit = 'THz'
+        elif thousands == 3:
+            unit = 'GHz'
+        elif thousands == 2:
+            unit = 'MHz'
+        elif thousands == 1:
+            unit = 'kHz'
+        elif thousands <= 0:
+            unit = 'Hz'
+            thousands = 0
 
-            fwhm_significand = fwhm / (1e+3)**thousands
-            fwhm_str = f'{fwhm_significand:S} {unit}'
-            print(f'{freq/1e+9:16S}{fwhm_str:>24}')
+        fwhm_significand = ufreq / (1e+3)**thousands
+        return f'{fwhm_significand:S} {unit}'
+
+    def print_refined_poles(self):
+        print(f'{"Freq (GHz)":16}{"FWHM":^24}{"Residue mag":^24}')
+        for i in range(len(self.refined_resonances)):
+            freq = self.refined_resonances[i]
+            fwhm = self.refined_fwhms[i]
+            resmag = self.refined_residue_mags[i]
+
+            fwhm_str = self._format_ufreq(fwhm)
+            resmag_str = self._format_ufreq(resmag)
+            print(f'{freq/1e+9:16S}{fwhm_str:>24}{resmag_str:>24}')
 
     def visualize(self, plot_unit=None, polar_scale=1e3):
         fig = plt.figure(
