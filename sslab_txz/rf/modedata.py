@@ -1,16 +1,24 @@
 import copy
-from collections.abc import Callable
+import itertools
+from collections.abc import Callable, Sequence
+from typing import Optional, Protocol
 
 import matplotlib.pyplot as plt
 import numpy as np
 import uncertainties.unumpy as unp
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 from scipy.constants import pi
 from uncertainties import ufloat
 
 
+class ModePlotStyler(Protocol):
+    def __call__(self, mode_data: np.recarray, *xvals: np.number) -> dict: ...
+
+
 class ModeParams:
-    def __init__(self, x, mode_records):
+    xs: tuple[NDArray[np.number], ...]
+
+    def __init__(self, xs: Sequence[ArrayLike], mode_records):
         '''
         mode_records: array_like, shape (..., 4)
             Parameter order: Re(pole), Im(pole), Re(residue), Im(residue).
@@ -20,10 +28,10 @@ class ModeParams:
 
         if rec_shape[-1] != 4:
             raise ValueError
-        if np.asarray(x).shape != rec_shape[:-1]:
+        if np.any(~np.equal([len(np.asarray(x)) for x in xs], rec_shape[:-1])):
             raise ValueError
 
-        self.x = np.array(x)
+        self.xs = tuple([np.array(x) for x in xs])
         self.params_arr = np.rec.fromrecords(
             mode_records,
             names=['pole_r', 'pole_i', 'res_r', 'res_i'],
@@ -57,20 +65,71 @@ class ModeParams:
     def q_factors(self):
         return self.freqs / self.fwhms
 
-    def errorbar_plot(self, uvalues, ax=None, remove_nans=False, **kwargs):
+    def errorbar_plot(
+            self,
+            uvalues,
+            axis=-1,
+            axes_order: Optional[Sequence[int]] = None,
+            ax=None,
+            remove_nans=False,
+            kwarg_func: Optional[ModePlotStyler] = None,
+    ):
+        '''
+        axis: int
+            Axis to plot by.
+        axes_order: Sequence[int]
+            Order of remaining axes to iterate over.
+            Must not include plot axis.
+
+            axes_order[0] is the first axis to iterate over
+            axes_order.index(0) is the position of the first storage axis in the iteration
+        kwarg_func: callable, optional
+            Function that produces plot kwargs given xcombos
+        '''
         if ax is None:
             fig, ax = plt.subplots()
 
-        mask = np.full(self.x.shape, True)
-        if remove_nans:
-            mask = ~np.isnan(unp.nominal_values(uvalues))
+        if axes_order is None:
+            axes_order = list(range(len(self.xs)))
+            axes_order.pop(axis)
 
-        ax.errorbar(
-            self.x[mask],
-            unp.nominal_values(uvalues[mask]),
-            unp.std_devs(uvalues[mask]),
-            **kwargs,
-        )
+        axis_x = self.xs[axis]
+
+        ind_iterator = itertools.product(*[
+            range(len(self.xs[i])) for i in axes_order
+        ])
+
+        for multi_ind in ind_iterator:
+            # multi_ind: axis ordering per desired iteration order
+
+            fullslice = slice(None, None, None)
+
+            # ordered according to storage order
+            this_iter_slice = tuple(
+                fullslice if i == axis else multi_ind[axes_order.index(i)]
+                for i in range(len(self.xs))
+            )
+            uvals = uvalues[this_iter_slice]
+            full_mode_data = self.params_arr[this_iter_slice]
+
+            mask = np.full_like(axis_x, True, dtype=np.bool_)
+            if remove_nans:
+                mask = ~np.isnan(unp.nominal_values(uvals))
+
+            xcombo = [
+                self.xs[axes_order[i]][ind]
+                for i, ind in enumerate(multi_ind)
+            ]
+            kwargs = dict(label=xcombo)
+            if kwarg_func is not None:
+                kwargs |= kwarg_func(full_mode_data, *xcombo)
+
+            ax.errorbar(
+                axis_x[mask],
+                unp.nominal_values(uvals[mask]),
+                unp.std_devs(uvals[mask]),
+                **kwargs,
+            )
 
 
 class FabryPerotModeParams(ModeParams):
