@@ -325,13 +325,20 @@ class WideScanNetwork(rf.Network):
 
         return fig, axs
 
-    def fit_network(self, n_poles_cmplx: int):
+    def fit_network(self, n_poles_cmplx: Optional[int] = None):
         vf = VectorFittingFancy(self)
-        vf.vector_fit(n_poles_real=0, n_poles_cmplx=n_poles_cmplx)
+        if n_poles_cmplx is None:
+            vf.auto_fit()
+        else:
+            vf.vector_fit(n_poles_real=0, n_poles_cmplx=n_poles_cmplx)
         vf.refine_fit()
         return vf
 
-    def fit_narrow_mode(self, n_poles_cmplx: int, frequency_err_max: float = 400e+3):
+    def fit_narrow_mode(
+            self,
+            n_poles_cmplx: Optional[int] = None,
+            frequency_err_max: float = 400e+3,
+    ):
         try:
             vf = self.fit_network(n_poles_cmplx)
             return vf.closest_pole_uparams(self.frequency.center, frequency_err_max)
