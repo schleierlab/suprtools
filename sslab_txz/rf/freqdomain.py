@@ -358,9 +358,14 @@ class WideScanData():
     @staticmethod
     def _get_s_param(
             f: h5py.File,
-            param: Literal['s11', 's21']) -> Optional[NDArray[np.complex128]]:
+            param: Literal['s11', 's21'],
+            raw: bool = False) -> Optional[NDArray[np.complex128]]:
 
-        datapath = f'data/s_params/{param}'
+        if raw:
+            datapath = f'data/s_params_raw/{param}'
+        else:
+            datapath = f'data/s_params/{param}'
+
         if datapath not in f:
             return None
 
@@ -369,11 +374,21 @@ class WideScanData():
         return real_part + 1j*imag_part
 
     @classmethod
-    def _load_window_data(cls, f: h5py.File, sample_temps=False):
+    def _load_window_data(
+            cls,
+            f: h5py.File,
+            sample_temps: bool = False,
+            raw: bool = False,
+    ) -> tuple[
+            rf.Frequency,
+            Optional[NDArray[np.complex128]],
+            Optional[NDArray[np.complex128]],
+            tuple,
+    ]:
         frequencies_dataset = f.get('data/frequencies')
         freq_obj = rf.Frequency.from_f(frequencies_dataset, unit='Hz')
-        s11_arr = cls._get_s_param(f, 's11')
-        s21_arr = cls._get_s_param(f, 's21')
+        s11_arr = cls._get_s_param(f, 's11', raw=raw)
+        s21_arr = cls._get_s_param(f, 's21', raw=raw)
 
         end_time_str = f.attrs['run_time']
         end_datetime = datetime.datetime.strptime(end_time_str, '%Y%m%dT%H%M%S') \
@@ -472,6 +487,7 @@ class WideScanData():
         h5s_path: Path,
         network_name: str,
         sample_temps: bool = False,
+        raw: bool = False,
     ):
         window_files = h5s_path.glob('window*.h5')
         n = max(int(p.name[6:-3]) for p in window_files) + 1
@@ -495,7 +511,7 @@ class WideScanData():
             end_ind = start_ind + points_per_window
             with h5py.File(h5s_path / f'window{i:03d}.h5') as f:
                 _, s11_data, s21_data, metadata_pt = \
-                    cls._load_window_data(f, sample_temps=sample_temps)
+                    cls._load_window_data(f, sample_temps=sample_temps, raw=raw)
                 s11_arr[start_ind:end_ind] = s11_data
                 s21_arr[start_ind:end_ind] = s21_data
                 metadata.append(metadata_pt)
