@@ -10,5 +10,8 @@
     "files.trimTrailingWhitespace": true,
     "flake8.args": [
         "--max-line-length=100"
-    ]
+    ],
+    "python.testing.pytestArgs": ["."],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
 }
