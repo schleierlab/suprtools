@@ -326,24 +326,14 @@ class WideScanNetwork(rf.Network):
         return fig, axs
 
     def fit_network(self, n_poles_cmplx: Optional[int] = None):
-        vf = VectorFittingFancy(self)
-        if n_poles_cmplx is None:
-            vf.auto_fit()
-        else:
-            vf.vector_fit(n_poles_real=0, n_poles_cmplx=n_poles_cmplx)
-        vf.refine_fit()
-        return vf
+        return fit_network(self, n_poles_cmplx)
 
     def fit_narrow_mode(
             self,
             n_poles_cmplx: Optional[int] = None,
             frequency_err_max: float = 400e+3,
     ):
-        try:
-            vf = self.fit_network(n_poles_cmplx)
-            return vf.closest_pole_uparams(self.frequency.center, frequency_err_max)
-        except RuntimeError:
-            return (ufloat(np.nan, np.nan),) * 4
+        return fit_narrow_mode(self, n_poles_cmplx, frequency_err_max)
 
 
 class WideScanData():
@@ -1394,6 +1384,27 @@ class VectorFittingFancy(rf.VectorFitting):
             return np.real(cmplx_gradient / factor[:, np.newaxis])
 
         return fit_function, jacobian
+
+
+def fit_network(network: rf.Network, n_poles_cmplx: Optional[int] = None):
+    vf = VectorFittingFancy(network)
+    if n_poles_cmplx is None:
+        vf.auto_fit()
+    else:
+        vf.vector_fit(n_poles_real=0, n_poles_cmplx=n_poles_cmplx)
+    vf.refine_fit()
+    return vf
+
+
+def fit_narrow_mode(
+        network: rf.Network,
+        n_poles_cmplx: Optional[int] = None,
+        frequency_err_max: float = 400e+3):
+    try:
+        vf = fit_network(network, n_poles_cmplx)
+        return vf.closest_pole_uparams(network.frequency.center, frequency_err_max)
+    except RuntimeError:
+        return (ufloat(np.nan, np.nan),) * 4
 
 
 def fit_mode(network, center_ghz, span_ghz, **vf_kwargs):
