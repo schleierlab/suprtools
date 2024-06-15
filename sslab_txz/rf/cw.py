@@ -101,9 +101,66 @@ class CWMeasurement:
             ax.set_ylabel('Power spectral density [U$^2$/Hz]')
 
         fft = np.fft.fft(self.s21, axis=-1, norm='ortho') / np.sqrt(self.f_sample)
+        mean_pow_spec = np.mean(np.abs(scale * fft)**2, axis=0)
+
+        fftfreqs = np.fft.fftfreq(len(self.t), d=1/self.f_sample)
 
         ax.semilogy(
-            np.fft.fftshift(np.fft.fftfreq(len(self.t)) * self.f_sample),
-            np.fft.fftshift(np.mean(np.abs(scale * fft)**2, axis=0)),
+            np.fft.fftshift(fftfreqs),
+            np.fft.fftshift(mean_pow_spec),
+            **kwargs,
+        )
+
+    def plot_integrated_rms_amplitude(
+            self,
+            ax: Optional[plt.Axes] = None,
+            scale: float = 1,
+            zero_start: bool = True,
+            **kwargs):
+        '''
+        Parameters
+        ----------
+        scale: float
+            Scale by which to multiply FFT. The scale converts from S21
+            units U to a desired unit V of choice (and should thus be
+            expressed in units of V/U).
+        '''
+        if ax is None:
+            _, ax = plt.subplots(layout='constrained')
+            ax = cast(plt.Axes, ax)
+            ax.set_xlabel('Frequency [Hz]')
+            ax.set_ylabel('Integrated rms amplitude [U]')
+
+        fft = np.fft.fft(self.s21, axis=-1, norm='ortho') / np.sqrt(self.f_sample)
+        mean_pow_spec = np.mean(np.abs(scale * fft)**2, axis=0)
+
+        fft_n = len(self.t)
+        if fft_n % 2 == 0:
+            # when n even, +/- frequency range have unequal size (off by 1)
+            # pad the (smaller) positive side with 0 power
+            # for the extra freq in the - part
+            padded_positive_part = np.pad(
+                mean_pow_spec[1:fft_n//2],
+                (0, 1),
+                mode='constant',
+                constant_values=0,
+            )
+            unsigned_pow_spec = padded_positive_part + mean_pow_spec[::-1][:fft_n//2]
+        else:
+            unsigned_pow_spec = mean_pow_spec[1:(fft_n+1)//2] + mean_pow_spec[::-1][:(fft_n+1)//2-1]
+
+        # reverse the negative part, since for even n the extra freq is negative
+        fftfreq = np.fft.fftfreq(len(self.t), d=1/self.f_sample)
+        positive_freqs = -fftfreq[::-1][:fft_n//2]
+        integrated_pow_spec = np.cumsum(unsigned_pow_spec) * fftfreq[1]
+
+        def prepend_zero(arr: ArrayLike):
+            return np.pad(arr, (1, 0), mode='constant', constant_values=0)
+
+        postprocess_func = prepend_zero if zero_start else lambda x: x
+
+        ax.plot(
+            postprocess_func(positive_freqs),
+            postprocess_func(np.sqrt(integrated_pow_spec)),
             **kwargs,
         )
