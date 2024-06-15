@@ -93,7 +93,12 @@ class RingdownSet(CWMeasurement):
                 min=0.5*np.abs(guess_prefactor),
                 max=2*np.abs(guess_prefactor),
             ),
-            fwhm=dict(value=guess_fwhm, min=1, max=8e+3),
+            # require 1/e time to be < 2 * ringdown duration
+            fwhm=dict(
+                value=guess_fwhm,
+                min=1/(2 * self.t[-1])/(2 * pi),
+                max=8e+3,
+            ),
             offset_re=dict(
                 value=np.real(guess_offset),
                 min=np.real(guess_offset)-s21_scale,
