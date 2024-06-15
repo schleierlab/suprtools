@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import importlib.resources
-from typing import Iterable, Literal, Mapping, Optional, cast, overload
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any, Literal, Optional, cast, overload
 
 import lmfit
 import matplotlib.pyplot as plt
@@ -70,6 +71,29 @@ class RingdownSet(CWMeasurement):
 
     def __len__(self) -> int:
         return len(self.s21)
+
+    def _repr_html_(self) -> Optional[str]:
+        fig, axs = plt.subplots(figsize=(4, 4), nrows=3, ncols=3, layout='constrained')
+
+        # NDArray generic possibilities too limited
+        # see https://stackoverflow.com/questions/74633074/how-to-type-hint-a-generic-numpy-array
+        axs = cast(NDArray[Any], axs)
+        axs_flat = cast(Sequence[plt.Axes], axs.flatten())
+
+        for i, ax in enumerate(axs_flat):
+            self[i].plot_cartesian(
+                ax=ax,
+                alpha=0.8,
+                linewidth=0.5,
+            )
+            # ax.scatter(0, 0, color='red', marker='+')
+            ax.axhline(0, linestyle='dotted', color='0.8')
+            ax.axvline(0, linestyle='dotted', color='0.8')
+
+            ax.xaxis.set_visible(False)
+            ax.yaxis.set_visible(False)
+
+        return fig._repr_html_()
 
     def _init_params_from_s21(
             self,
