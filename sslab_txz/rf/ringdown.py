@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import importlib.resources
-from typing import Iterable, Literal, Mapping, Optional, cast
+from typing import Iterable, Literal, Mapping, Optional, cast, overload
 
 import lmfit
 import matplotlib.pyplot as plt
@@ -52,7 +52,12 @@ class RingdownSet(CWMeasurement):
             self.t, self.s21.mean(axis=0), self.frequency, None, self.stage_positions,
         )
 
-    def __getitem__(self, key: int | slice) -> RingdownSet:
+    @overload
+    def __getitem__(self, key: int) -> Ringdown: ...
+    @overload
+    def __getitem__(self, key: slice) -> RingdownSet: ...
+
+    def __getitem__(self, key):
         match key:
             case int(i):
                 return Ringdown(
