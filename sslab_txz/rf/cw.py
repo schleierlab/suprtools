@@ -1,4 +1,4 @@
-from typing import Mapping, Optional, Self, cast
+from typing import Literal, Mapping, Optional, Self, cast
 
 import h5py
 import numpy as np
@@ -83,36 +83,54 @@ class CWMeasurement:
 
     def plot_power_spectrum(
             self, ax: Optional[plt.Axes] = None, scale: float = 1, **kwargs):
+        return self.plot_spectrum(units='power', ax=ax, scale=scale, **kwargs)
+
+    def plot_spectrum(
+            self,
+            units: Literal['amplitude', 'power'],
+            ax: Optional[plt.Axes] = None,
+            scale: float = 1,
+            **kwargs):
         '''
         Parameters
         ----------
         scale: float
-            Scale by which to multiply FFT. This is the square root of
-            the scaling factor ultimately on the y-axis, since the power
-            spectrum goes as FFT squared. The scale converts from S21
+            Scale by which to multiply FFT. The scale converts from S21
             units U to a desired unit V of choice (and should thus be
-            expressed in units of V/U).
+            expressed in units of V/U). If plotting power, this is the
+            square root of the scaling factor ultimately on the y-axis,
+            since the power spectrum goes as FFT squared.
 
         '''
         if ax is None:
             _, ax = plt.subplots(layout='constrained')
             ax = cast(plt.Axes, ax)
             ax.set_xlabel('Frequency [Hz]')
-            ax.set_ylabel('Power spectral density [U$^2$/Hz]')
+
+            if units == 'amplitude':
+                ax.set_ylabel(R'Amplitude spectral density [U/$\sqrt{\mathrm{Hz}}$]')
+            elif units == 'power':
+                ax.set_ylabel('Power spectral density [U$^2$/Hz]')
 
         fft = np.fft.fft(self.s21, axis=-1, norm='ortho') / np.sqrt(self.f_sample)
         mean_pow_spec = np.mean(np.abs(scale * fft)**2, axis=0)
 
         fftfreqs = np.fft.fftfreq(len(self.t), d=1/self.f_sample)
 
+        if units == 'amplitude':
+            exponent = 0.5
+        elif units == 'power':
+            exponent = 1
+
         ax.semilogy(
             np.fft.fftshift(fftfreqs),
-            np.fft.fftshift(mean_pow_spec),
+            np.fft.fftshift(mean_pow_spec ** exponent),
             **kwargs,
         )
 
-    def plot_integrated_rms_amplitude(
+    def plot_integrated_spectrum(
             self,
+            units: Literal['amplitude', 'power'],
             ax: Optional[plt.Axes] = None,
             scale: float = 1,
             zero_start: bool = True,
@@ -129,7 +147,11 @@ class CWMeasurement:
             _, ax = plt.subplots(layout='constrained')
             ax = cast(plt.Axes, ax)
             ax.set_xlabel('Frequency [Hz]')
-            ax.set_ylabel('Integrated rms amplitude [U]')
+
+            if units == 'amplitude':
+                ax.set_ylabel('Integrated rms amplitude [U]')
+            elif units == 'power':
+                ax.set_ylabel('Integrated power [U$^2$]')
 
         fft = np.fft.fft(self.s21, axis=-1, norm='ortho') / np.sqrt(self.f_sample)
         mean_pow_spec = np.mean(np.abs(scale * fft)**2, axis=0)
@@ -159,8 +181,13 @@ class CWMeasurement:
 
         postprocess_func = prepend_zero if zero_start else lambda x: x
 
+        if units == 'amplitude':
+            exponent = 0.5
+        elif units == 'power':
+            exponent = 1
+
         ax.plot(
             postprocess_func(positive_freqs),
-            postprocess_func(np.sqrt(integrated_pow_spec)),
+            postprocess_func(integrated_pow_spec ** exponent),
             **kwargs,
         )
