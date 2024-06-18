@@ -23,6 +23,7 @@ from uncertainties import UFloat
 
 from sslab_txz.plotting import sslab_style
 from sslab_txz.rf.cw import CWMeasurement
+from sslab_txz.rf.errors import FitFailureError
 
 from . import img
 
@@ -499,9 +500,9 @@ class RingdownScalarFit(RingdownCollectiveFit):
 
     def fit_phase(self):
         if self.fit_result is None:
-            raise RuntimeError
+            raise FitFailureError
         if not hasattr(self.fit_result, 'uvars'):
-            raise RuntimeError
+            raise FitFailureError
 
         uvars = self.fit_result.uvars
         offset = uvars['offset_re'].n + 1j * uvars['offset_im'].n

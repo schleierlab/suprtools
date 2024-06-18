@@ -20,6 +20,7 @@ from tqdm import tqdm
 from uncertainties import ufloat, unumpy
 
 from sslab_txz.plotting import sslab_style
+from sslab_txz.rf.errors import FitFailureError
 
 
 class ScanDataFilter():
@@ -1070,23 +1071,22 @@ class VectorFittingFancy(rf.VectorFitting):
             proportional_coeff,
             norm=norm,
         )
-        popt, pcov, *extra_info = scipy.optimize.curve_fit(
-            fit_function,
-            fit_function_input,
-            fit_function_values,
-            sigma=fit_sigma,
-            absolute_sigma=absolute_sigma,
-            p0=p0,
-            bounds=bounds,
-            xtol=1e-12,
-            jac=jacobian,
-            full_output=True,
-        )
 
-        # print(popt)
-        # print(np.diag(pcov))
-        # print(f'pcov condition number: {np.linalg.cond(pcov)}')
-        # print(extra_info)
+        try:
+            popt, pcov, *extra_info = scipy.optimize.curve_fit(
+                fit_function,
+                fit_function_input,
+                fit_function_values,
+                sigma=fit_sigma,
+                absolute_sigma=absolute_sigma,
+                p0=p0,
+                bounds=bounds,
+                xtol=1e-12,
+                jac=jacobian,
+                full_output=True,
+            )
+        except RuntimeError:
+            raise FitFailureError
 
         raveler = self.make_fit_param_raveler(
             n_poles_real,
@@ -1409,13 +1409,7 @@ def fit_narrow_mode(
 
 def fit_mode(network, center_ghz, span_ghz, **vf_kwargs):
     subnet = network._subnetwork(center_ghz, span_ghz)
-    vf = VectorFittingFancy(subnet)
-    vf.vector_fit(
-        n_poles_real=0,
-        **vf_kwargs,
-    )
-    vf.refine_fit()
-    return vf
+    return fit_network(subnet, **vf_kwargs)
 
 
 def test_a_fit(network, center_ghz, span_ghz, **vf_kwargs):
