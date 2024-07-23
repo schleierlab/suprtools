@@ -4,6 +4,7 @@ from typing import Literal
 import numpy as np
 import scipy.constants
 import scipy.integrate
+from numpy.typing import ArrayLike
 from scipy.constants import hbar
 from scipy.constants import k as k_B
 from scipy.constants import mu_0, pi
@@ -87,8 +88,8 @@ class TypeIISuperconductor:
 
     def bcs_surface_resistance(
             self,
-            freq: float,
-            temp: float,
+            freq: ArrayLike,
+            temp: ArrayLike,
             method: BCSMethod = 'numeric',
     ):
         '''
@@ -97,9 +98,9 @@ class TypeIISuperconductor:
 
         Parameters
         ----------
-        freq : scalar
+        freq : array-like
             AC frequency, in Hz
-        temp : scalar
+        temp : array-like
             temperature, in K
         method : {'numeric', '1216'}, optional
             Method to use to compute the BCS resistance. Defaults to 'numeric'.
@@ -125,6 +126,9 @@ class TypeIISuperconductor:
             The BCS surface resistance at the specified frequency and
             temperature, evaluated numerically.
         '''
+        freq = np.asarray(freq)
+        temp = np.asarray(temp)
+
         omega = 2 * pi * freq
         eta = hbar * omega / (k_B * self.gap_temperature)
         beta_dimless = self.gap_temperature / temp
@@ -218,3 +222,24 @@ class Niobium(TypeIISuperconductor):
     coherence_length: float = 40e-9
     gap_temperature: float = 17.67
     room_temperature_resistivity: float = 147e-9
+
+    def __init__(self, residual_resistivity_ratio):
+        self.residual_resistivity_ratio = residual_resistivity_ratio
+
+
+def cavity_finesse(
+        freq: ArrayLike,
+        temp: ArrayLike,
+        limiting_finesse: float,
+        superconductor: TypeIISuperconductor,
+        bcs_fudge_factor: float = 1,
+        method: TypeIISuperconductor.BCSMethod = 'numeric',
+) -> float:
+    geom_factor_ohm_f = (pi / 4) * scipy.constants.value('characteristic impedance of vacuum')
+    surface_res = superconductor.bcs_surface_resistance(
+        np.asarray(freq),
+        np.asarray(temp),
+        method,
+    )
+    limiting_surface_res = geom_factor_ohm_f / limiting_finesse
+    return geom_factor_ohm_f / (surface_res * bcs_fudge_factor + limiting_surface_res)
