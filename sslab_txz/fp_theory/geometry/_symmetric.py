@@ -3,7 +3,10 @@ from dataclasses import dataclass
 from fractions import Fraction
 
 import numpy as np
-from scipy.constants import c, pi
+from numpy.typing import ArrayLike
+from scipy.constants import c, epsilon_0
+from scipy.constants import h as planck_h
+from scipy.constants import pi
 
 import sslab_txz.fp_theory.operators as ops
 from sslab_txz.fp_theory.coupling import (CouplingConfig,
@@ -53,8 +56,33 @@ class SymmetricCavityGeometry(CavityGeometry):
     def g_y(self) -> float:
         return 1 - self.length / self.ry
 
-    def paraxial_frequency(self, longi_ind: int, n_total: int) -> float:
-        return self.fsr * (longi_ind + (n_total + 1) * np.arccos(self.g) / pi)
+    @property
+    def alpha(self) -> float:
+        '''
+        The factor w1 / w0, where w0 is the mode waist and w1 is the
+        mode spot size on the mirror. This factor is constant.
+        '''
+        # == w1 / w0
+        return np.sqrt(self.mirror_curv_rad / (self.mirror_curv_rad - self.z1))
+
+    def paraxial_frequency(self, longi_ind: ArrayLike, n_total: ArrayLike) -> ArrayLike:
+        '''
+        Parameters
+        ----------
+        longi_ind : array_like
+            Longitudinal mode index (number of antinodes).
+        n_total: array_like
+            Total transverse mode index (number of transverse nodes).
+            Equal to n + m for Hermite-Gauss HG(n, m) modes and to
+            2p + |l| for Laguerre-Gauss LG(p, l) modes.
+
+        Returns
+        -------
+        array_like
+            Frequency of specified mode, in Hz, according to the
+            paraxial theory
+        '''
+        return self.fsr * (longi_ind + (np.asarray(n_total) + 1) * np.arccos(self.g) / pi)
 
     def paraxial_mode_field(self, r, z, freq):
         k = 2 * pi * freq / c
@@ -67,10 +95,43 @@ class SymmetricCavityGeometry(CavityGeometry):
         return (w0 / w) * np.exp(-(r / w)**2) \
             * np.cos(k*z + k * r**2 * inv_wavefront_curv / 2 - gouy_phase)
 
-    @property
-    def alpha(self) -> float:
-        # == w1 / w0
-        return np.sqrt(self.mirror_curv_rad / (self.mirror_curv_rad - self.z1))
+    def mode_volume(self, longi_ind: ArrayLike):
+        '''
+        The mode volume of a TEM(00) mode:
+            L lambda z_0 / 4 = pi L w0^2 / 4
+
+        Parameters
+        ----------
+        longi_ind : array_like
+            The longitudinal index of the mode.
+
+        Returns
+        -------
+        ndarray
+            The mode volume, in m^3
+        '''
+        wavelength = c / self.paraxial_frequency(longi_ind, 0)
+        return self.z0 * self.length * wavelength / 4
+
+    def waist_vacuum_field(self, longi_ind: ArrayLike) -> ArrayLike:
+        '''
+        Electric field (rms) for a TEM(00) mode at the mode center with
+        with half-photon energy in the mode. Only really makes sense for
+        `longi_ind` odd.
+
+        Parameters
+        ----------
+        longi_ind : array_like
+            The longitudinal index of the mode.
+
+        Returns
+        -------
+        ndarray
+            rms vacuum field, in V/m.
+        '''
+        mode_volume = self.mode_volume(longi_ind)
+        freq = self.paraxial_frequency(longi_ind, 0)
+        return np.sqrt(planck_h * freq / (2 * epsilon_0 * mode_volume))
 
     @staticmethod
     def _even_modes_list(n_max):
