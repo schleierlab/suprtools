@@ -196,6 +196,7 @@ class WideScanNetwork(rf.Network):
         filt: ScanDataFilter,
         fig=None,
         axs=None,
+        **kwargs,
     ):
         make_fig = fig is None or axs is None
         if make_fig:
@@ -213,13 +214,15 @@ class WideScanNetwork(rf.Network):
             self.f / 1e+9,
             rf.complex_2_magnitude(self.s.flatten()),
             linewidth=0.75,
-            label='Raw data',
+            label=self.name,
+            **kwargs,
         )
         ax2.plot(
             self.f / 1e+9,
             rf.complex_2_magnitude(filtered_network),
             linewidth=0.25,
-            label=fr'Filtered, {filt.latex_repr()}',
+            label=self.name,
+            **kwargs,
         )
 
         if make_fig:
