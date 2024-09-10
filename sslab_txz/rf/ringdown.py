@@ -105,7 +105,7 @@ class RingdownSet(CWMeasurement):
             s21: NDArray,
             model: Literal['spiral', 'circularized'] = 'spiral',
             suffix: Optional[str] = None,
-            init_params: Mapping[str, Mapping] = dict(),
+            init_params: dict[str, dict] = dict(),
     ) -> Parameters:
         guess_offset = s21[-10:].mean()
         guess_std = np.real(s21[-10:]).std()
