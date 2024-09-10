@@ -1,12 +1,15 @@
 import itertools
 from dataclasses import dataclass
 from fractions import Fraction
+from typing import TypeAlias
 
 import numpy as np
 from numpy.typing import ArrayLike
 from scipy.constants import c, epsilon_0
 from scipy.constants import h as planck_h
 from scipy.constants import pi
+from uncertainties import UFloat
+from uncertainties import unumpy as unp
 
 import sslab_txz.fp_theory.operators as ops
 from sslab_txz.fp_theory.coupling import (CouplingConfig,
@@ -16,13 +19,15 @@ from sslab_txz.fp_theory.modes import ScalarModeBasis
 from sslab_txz.fp_theory.operators import (ScalarModeOperator,
                                            VectorModeOperator)
 
+_MaybeUFloat: TypeAlias = float | UFloat
+
 
 @dataclass
 class SymmetricCavityGeometry(CavityGeometry):
-    length: float
-    mirror_curv_rad: float
-    eta_astig: float = 0
-    asphere_p: float = 0  # \tilde{p}, as defined in van Exter et al. (2022), eq. 28.
+    length: _MaybeUFloat
+    mirror_curv_rad: _MaybeUFloat
+    eta_astig: _MaybeUFloat = 0
+    asphere_p: _MaybeUFloat = 0  # \tilde{p}, as defined in van Exter et al. (2022), eq. 28.
 
     @property
     def fsr(self) -> float:
@@ -82,7 +87,7 @@ class SymmetricCavityGeometry(CavityGeometry):
             Frequency of specified mode, in Hz, according to the
             paraxial theory
         '''
-        return self.fsr * (longi_ind + (np.asarray(n_total) + 1) * np.arccos(self.g) / pi)
+        return self.fsr * (longi_ind + (np.asarray(n_total) + 1) * unp.arccos(self.g) / pi)
 
     def paraxial_mode_field(self, r, z, freq):
         k = 2 * pi * freq / c
