@@ -453,7 +453,7 @@ class RingdownCollectiveFit:
         )
         self.fit_result = lmfit.minimize(self.residual, params)
 
-    def plot_fit(self, ax: Optional[plt.Axes] = None, xscale=1):
+    def plot_fit(self, ax: Optional[plt.Axes] = None, xscale=1, legend_kw=dict()):
         if ax is None:
             fig, ax = plt.subplots()
         if self.fit_result is None:
@@ -474,7 +474,7 @@ class RingdownCollectiveFit:
             label=Rf'$\kappa/2\pi = {uvars['fwhm']:SL} $ Hz',
         )
         ax.set_yscale('log')
-        ax.legend()
+        ax.legend(**legend_kw)
 
     def _repr_html_(self) -> Optional[str]:
         if self.fit_result is None:
