@@ -1,4 +1,5 @@
-from typing import ClassVar, cast
+import itertools
+from typing import ClassVar, Optional, cast
 
 import numpy as np
 import scipy.optimize
@@ -30,6 +31,9 @@ class TEM00Fit:
 
         freqs_std = unp.std_devs(self.freqs)
         self.freqs_std = None if np.any(freqs_std == 0) else freqs_std
+
+    def _fitted(self):
+        return hasattr(self, 'upopt')
 
     @classmethod
     def _tem00_fitfunc_nextorder(cls, qpol, length, mean_curv_rad, eta_astig, alpha2):
@@ -131,7 +135,7 @@ class TEM00Fit:
             line, _, _ = ax_freq.errorbar(
                 plot_qs,
                 (plot_freqs - plot_qs * fit_fsr) / 1e+9,
-                yerr=self.freqs_std[polmask]/1e+9,
+                yerr=(self.freqs_std[polmask]/1e+9 if self.freqs_std else None),
                 linestyle='None',
                 color='C0',
                 marker=markers[pol],
@@ -148,7 +152,7 @@ class TEM00Fit:
             ax_resid.errorbar(
                 plot_qs,
                 (plot_freqs - unp.nominal_values(self(plot_qs, pol))) / 1e+3,
-                yerr=self.freqs_std[polmask]/1e+3,
+                yerr=(self.freqs_std[polmask]/1e+3 if self.freqs_std else None),
                 capsize=2,
                 linestyle='None',
                 color=line.get_color(),
@@ -175,3 +179,26 @@ class TEM00Fit:
             sslab_style(ax)
 
         return fig, axs
+
+    def _repr_html_(self) -> Optional[str]:
+        if not self._fitted():
+            return None
+        fig, _ = self.plot()
+        return fig._repr_html_()
+
+    def scan_segment_file(
+            self,
+            q_vals,
+            pols=[+1, -1],
+            span: int = 150000,
+            npoints: int = 1001,
+            ifbw: int = 100,
+            n_avg: int = 1,
+    ) -> str:
+        header = ['# center span npoints ifbw n_avg']
+        lines = (
+            f'{self(q, pol).n:15_.0f} {span:_d} {npoints} {ifbw:_d} {n_avg}'
+            for q in q_vals for pol in pols
+        )
+
+        return '\n'.join(itertools.chain(header, lines))
