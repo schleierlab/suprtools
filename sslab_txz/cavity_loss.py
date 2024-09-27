@@ -220,11 +220,12 @@ class TypeIISuperconductor:
 class Niobium(TypeIISuperconductor):
     penetration_depth: float = 36e-9
     coherence_length: float = 40e-9
-    gap_temperature: float = 17.67
+    # gap_temperature: float = 17.67
     room_temperature_resistivity: float = 147e-9
 
-    def __init__(self, residual_resistivity_ratio):
+    def __init__(self, residual_resistivity_ratio, gap_temperature=17.67):
         self.residual_resistivity_ratio = residual_resistivity_ratio
+        self.gap_temperature = gap_temperature
 
 
 def cavity_finesse(
