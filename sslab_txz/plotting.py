@@ -89,3 +89,21 @@ def label_subplots(fig: plt.Figure, axs: Sequence[plt.Axes], label_fmt='(alph)')
             # fontfamily='serif',
             # bbox=dict(facecolor='0.7', edgecolor='none', pad=3.0),
         )
+
+
+def watermark(ax: plt.Axes, text: str, **kwargs):
+    default_kw = dict(
+        color='red',
+        alpha=0.5,
+        fontsize=30,
+        ha='center',
+        va='center',
+        rotation=30,
+    )
+    ax.text(
+        0.5, 0.5,
+        text,
+        transform=ax.transAxes,
+        fontdict=None,  # redundant line for mypy
+        **(default_kw | kwargs),
+    )
