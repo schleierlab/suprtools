@@ -436,7 +436,7 @@ class RingdownCollectiveFit:
         max_fwhm = 0.1 / (self.t[1] - self.t[0])
         min_fwhm = 0.1 / (self.t[-1] - self.t[0])
 
-        offset_guess = self.ringdown_set.s21[:, -20:].mean()
+        offset_guess = self.ringdown_set.s21[:, -30:].mean()
         params = lmfit.create_params(
             a0=dict(
                 value=np.mean(np.abs(self.ringdown_set.s21[:, 0] - offset_guess)**2),
