@@ -153,6 +153,7 @@ class ModeBasis(object):
             avals,
             bvals,
             np.sum(np.abs(self.eval_field(vector, rss, thetass))**2, axis=-1),
+            rasterized=True,
             **kwargs
         )
 
