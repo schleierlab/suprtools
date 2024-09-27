@@ -389,15 +389,21 @@ class WideScanData():
             .replace(tzinfo=datetime.timezone.utc)
 
         metadata_pt: tuple[float, float, datetime.datetime] | tuple[float, datetime.datetime]
+
+        temperature_attr = (
+            'temperature_still' if 'temperature_still' in f.attrs
+            else 'temperature_plate'
+        )
+
         if sample_temps:
             metadata_pt = (
-                f.attrs['temperature_still'],
+                f.attrs[temperature_attr],
                 f.attrs['temperature_sample'],
                 end_datetime,
             )
         else:
             metadata_pt = (
-                f.attrs['temperature_still'],
+                f.attrs[temperature_attr],
                 end_datetime,
             )
 
@@ -432,9 +438,9 @@ class WideScanData():
 
         names: tuple[str, ...]
         if sample_temps:
-            names = ('t_still', 't_samp', 'end_time')
+            names = ('t_plate', 't_samp', 'end_time')
         else:
-            names = ('t_still', 'end_time')
+            names = ('t_plate', 'end_time')
 
         # formats=None is a workaround for https://github.com/numpy/numpy/issues/26376
         metadata_arr = np.rec.fromrecords((metadata_pt,), names=names, formats=None)
@@ -524,9 +530,9 @@ class WideScanData():
         )
 
         if sample_temps:
-            names = ['t_still', 't_samp', 'end_time']
+            names = ['t_plate', 't_samp', 'end_time']
         else:
-            names = ['t_still', 'end_time']
+            names = ['t_plate', 'end_time']
 
         # formats=None is a workaround for https://github.com/numpy/numpy/issues/26376
         metadata_arr = np.rec.fromrecords(metadata, names=names, formats=None)
