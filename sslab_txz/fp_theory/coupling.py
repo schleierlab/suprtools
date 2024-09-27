@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import itertools
 from dataclasses import dataclass
-from typing import Callable, Literal
+from typing import ClassVar, Literal, Optional
 
 import matplotlib.projections
 import numpy as np
@@ -13,6 +15,11 @@ from sslab_txz.fp_theory.modes import VectorModeBasis
 
 @dataclass
 class CouplingConfig:
+    no_xcoupling: ClassVar[CouplingConfig]
+    config_nopolmix: ClassVar[CouplingConfig]
+    all_xcoupling: ClassVar[CouplingConfig]
+    paraxial: ClassVar[CouplingConfig]
+
     prop: bool = True
     prop_xcoupling: bool = False
     wave: bool = True
@@ -135,16 +142,20 @@ class NearConfocalCouplingMatrix():
             offset=0,
             scaling=1e9,
             ax=None,
-            label=False,
+            label: Optional[float] = None,
             color=(lambda n: f'C{n//2+1}'),
             **kwargs):
         '''
+        Parameters
+        ----------
         offset: fsr_guess * offset_ind
+        label: float, optional
+            If specified, the y-position (in axis units) of the annotation labels.
         '''
         if ax is None:
             fig, ax = plt.subplots()
 
-        if isinstance(color, Callable):
+        if callable(color):
             colorfunc = color
         else:
             def colorfunc(_):
@@ -165,8 +176,8 @@ class NearConfocalCouplingMatrix():
             if label:
                 ax.annotate(
                     f'$N = {transverse_ind}$',
-                    (plot_freq, 0.5),
-                    (plot_freq, 0.5),
+                    (plot_freq, label),
+                    (plot_freq, label),
                     rotation=90,
                     xycoords=ax.get_xaxis_transform(),
                     verticalalignment='center',
