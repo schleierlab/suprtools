@@ -15,6 +15,7 @@ from lmfit import Parameters
 from lmfit.minimizer import MinimizerResult
 from lmfit.model import ModelResult
 from lmfit.models import LinearModel
+from matplotlib.axes import Axes
 from numpy.typing import NDArray
 from PIL import Image
 from scipy.constants import pi
@@ -83,7 +84,7 @@ class RingdownSet(CWMeasurement):
         # NDArray generic possibilities too limited
         # see https://stackoverflow.com/questions/74633074/how-to-type-hint-a-generic-numpy-array
         axs = cast(NDArray[Any], axs)
-        axs_flat = cast(Sequence[plt.Axes], axs.flatten())
+        axs_flat = cast(Sequence[Axes], axs.flatten())
 
         for i, ax in enumerate(axs_flat):
             self[i].plot_cartesian(
@@ -306,10 +307,10 @@ class Ringdown(RingdownSet):
                 kws=dict(data=s21),
             )
 
-    def plot_cartesian(self, scale=1, ax: Optional[plt.Axes] = None, **kwargs):
+    def plot_cartesian(self, scale=1, ax: Optional[Axes] = None, **kwargs):
         if ax is None:
             fig, ax = plt.subplots()
-            ax = cast(plt.Axes, ax)
+            ax = cast(Axes, ax)
 
         ax.set_aspect(1)
         ax.set_box_aspect(1)
@@ -453,7 +454,7 @@ class RingdownCollectiveFit:
         )
         self.fit_result = lmfit.minimize(self.residual, params)
 
-    def plot_fit(self, ax: Optional[plt.Axes] = None, xscale=1, legend_kw=dict()):
+    def plot_fit(self, ax: Optional[Axes] = None, xscale=1, legend_kw=dict()):
         if ax is None:
             fig, ax = plt.subplots()
         if self.fit_result is None:
@@ -529,7 +530,7 @@ class RingdownScalarFit(RingdownCollectiveFit):
                 sharex=True,
                 layout='constrained',
             )
-            ax_cart, ax_db = cast(tuple[plt.Axes, ...], axs)
+            ax_cart, ax_db = cast(tuple[Axes, ...], axs)
         else:
             fig, axs = plt.subplot_mosaic(
                 [
@@ -539,7 +540,7 @@ class RingdownScalarFit(RingdownCollectiveFit):
                 layout='constrained',
                 figsize=(9.6, 4),
             )
-            axs = cast(Mapping[str, plt.Axes], axs)
+            axs = cast(Mapping[str, Axes], axs)
             ax_cart = axs['cart']
             ax_db = axs['db']
             ax_phase = axs['phase']

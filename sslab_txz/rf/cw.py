@@ -3,6 +3,7 @@ from typing import Literal, Mapping, Optional, Self, cast
 import h5py
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
 from numpy.typing import ArrayLike, NDArray
 
 
@@ -82,13 +83,13 @@ class CWMeasurement:
         return cls(t, s21, frequency, temperatures, stage_positions)
 
     def plot_power_spectrum(
-            self, ax: Optional[plt.Axes] = None, scale: float = 1, **kwargs):
+            self, ax: Optional[Axes] = None, scale: float = 1, **kwargs):
         return self.plot_spectrum(units='power', ax=ax, scale=scale, **kwargs)
 
     def plot_spectrum(
             self,
             units: Literal['amplitude', 'power'],
-            ax: Optional[plt.Axes] = None,
+            ax: Optional[Axes] = None,
             scale: float = 1,
             **kwargs):
         '''
@@ -104,7 +105,7 @@ class CWMeasurement:
         '''
         if ax is None:
             _, ax = plt.subplots(layout='constrained')
-            ax = cast(plt.Axes, ax)
+            ax = cast(Axes, ax)
             ax.set_xlabel('Frequency [Hz]')
 
             if units == 'amplitude':
@@ -131,7 +132,7 @@ class CWMeasurement:
     def plot_integrated_spectrum(
             self,
             units: Literal['amplitude', 'power'],
-            ax: Optional[plt.Axes] = None,
+            ax: Optional[Axes] = None,
             scale: float = 1,
             zero_start: bool = True,
             **kwargs):
@@ -145,7 +146,7 @@ class CWMeasurement:
         '''
         if ax is None:
             _, ax = plt.subplots(layout='constrained')
-            ax = cast(plt.Axes, ax)
+            ax = cast(Axes, ax)
             ax.set_xlabel('Frequency [Hz]')
 
             if units == 'amplitude':

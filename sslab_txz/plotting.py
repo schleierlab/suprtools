@@ -2,7 +2,8 @@ import re
 from collections.abc import Sequence
 
 import matplotlib
-from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 from matplotlib.ticker import AutoMinorLocator
 
 
@@ -51,7 +52,7 @@ def to_roman(n: int) -> str:
     return ''.join(reversed([_digit_to_roman(d, place) for place, d in enumerate(digits_reversed)]))
 
 
-def label_subplots(fig: plt.Figure, axs: Sequence[plt.Axes], label_fmt='(alph)'):
+def label_subplots(fig: Figure, axs: Sequence[Axes], label_fmt='(alph)'):
     for i, ax in enumerate(axs):
         # label physical distance in and down:
         trans = matplotlib.transforms.ScaledTranslation(5/72, -5/72, fig.dpi_scale_trans)
@@ -91,7 +92,7 @@ def label_subplots(fig: plt.Figure, axs: Sequence[plt.Axes], label_fmt='(alph)')
         )
 
 
-def watermark(ax: plt.Axes, text: str, **kwargs):
+def watermark(ax: Axes, text: str, **kwargs):
     default_kw = dict(
         color='red',
         alpha=0.5,
