@@ -1,22 +1,40 @@
+from __future__ import annotations
+
 import copy
 import itertools
 from collections.abc import Callable, Sequence
-from typing import Optional, Protocol
+from types import EllipsisType
+from typing import (Any, ClassVar, Literal, Optional, Protocol, Self,
+                    SupportsIndex, TypedDict, cast)
 
 import matplotlib.pyplot as plt
 import numpy as np
 import uncertainties.unumpy as unp
+from matplotlib.axes import Axes
+from matplotlib.typing import ColorType
+from numpy._typing import _ArrayLikeInt_co
 from numpy.typing import ArrayLike, NDArray
 from scipy.constants import pi
 from uncertainties import ufloat
 
 
+class _ErrorbarKwargs(TypedDict, total=False):
+    color: ColorType
+    label: Any  # anything that can be str()'d
+    linewidth: Any
+    alpha: Any
+
+
 class ModePlotStyler(Protocol):
-    def __call__(self, mode_data: np.recarray, *xvals: np.number) -> dict: ...
+    def __call__(self, mode_data: np.recarray, *xvals: np.number) -> _ErrorbarKwargs: ...
+
+
+RecIndex1D = _ArrayLikeInt_co | slice
 
 
 class ModeParams:
     xs: tuple[NDArray[np.number], ...]
+    _FIELD_NAMES: ClassVar[tuple[str, ...]] = ('pole_r', 'pole_i', 'res_r', 'res_i')
 
     def __init__(self, xs: Sequence[ArrayLike], mode_records):
         '''
@@ -24,24 +42,96 @@ class ModeParams:
             Parameter order: Re(pole), Im(pole), Re(residue), Im(residue).
             Poles and residues should be specified in angular units (1/s).
         '''
-        rec_shape = np.asarray(mode_records).shape
+        if isinstance(mode_records, np.recarray):
+            if mode_records.dtype.names != self._FIELD_NAMES:
+                raise ValueError
+            records_shape = mode_records.shape
+            self.params_arr = mode_records
+        else:
+            rec_shape = np.asarray(mode_records).shape
+            if rec_shape[-1] != 4:
+                raise ValueError
+            records_shape = rec_shape[:-1]
+            self.params_arr = np.rec.fromrecords(
+                mode_records,
+                names=self._FIELD_NAMES,
+                formats=None,  # workaround for https://github.com/numpy/numpy/issues/26376
+            )
 
-        if rec_shape[-1] != 4:
-            raise ValueError
-        if np.any(~np.equal([len(np.asarray(x)) for x in xs], rec_shape[:-1])):
-            raise ValueError
+        xs_lens = [len(np.asarray(x)) for x in xs]
+        if np.any(~np.equal(xs_lens, records_shape)):
+            raise ValueError(f'Input record array shape {records_shape} != xs shape {xs_lens}')
 
         self.xs = tuple([np.array(x) for x in xs])
-        self.params_arr = np.rec.fromrecords(
-            mode_records,
-            names=['pole_r', 'pole_i', 'res_r', 'res_i'],
-            formats=None,  # workaround for https://github.com/numpy/numpy/issues/26376
+        for ndarr in self.xs:
+            ndarr.flags.writeable = False
+
+    @property
+    def ndim(self):
+        return len(self.xs)
+
+    def __getitem__(
+            self,
+            indx: (
+                EllipsisType | slice | SupportsIndex  # basic indexing
+                | Sequence | np.ndarray  # advanced indexing
+                | tuple[SupportsIndex | slice | EllipsisType | Sequence, ...]
+            )) -> Self:
+        '''
+        Return another ModeParams with records given by indexing the
+        current records with the given index. The index may be:
+            - any allowable index for numpy basic indexing without np.newaxis:
+                - integer (or any SupportsIndex)
+                - ellipsis
+                - slice
+                - any tuple of the above (but with no more than two ...)
+                    up to the tensor rank (ndim)
+            -
+
+        '''
+        indx_tuple: tuple[SupportsIndex | slice, ...]
+        adv_indexing = False
+        if isinstance(indx, tuple):
+            if any(isinstance(elt, Sequence | np.ndarray) for elt in indx):
+                raise NotImplementedError('Advanced indexing not supported')
+
+            if np.newaxis in indx:
+                raise ValueError('Cannot insert newaxis into ModeParams')
+
+            ellipsis_occurrences = np.sum(np.asarray(indx) == Ellipsis)
+            if ellipsis_occurrences >= 2:
+                raise ValueError('Cannot use ... twice')
+            elif ellipsis_occurrences == 1:
+                ellipsis_position = indx.index(...)
+
+                indx_tuple = indx[:ellipsis_position] \
+                    + (self.ndim - len(indx) + 1) * (slice(None),) \
+                    + indx[ellipsis_position+1:]
+            elif ellipsis_occurrences == 0:
+                indx_tuple = cast(tuple[SupportsIndex | slice, ...], indx) \
+                    + (slice(None),) * (self.ndim - len(indx))
+        else:
+            if isinstance(indx, Sequence | np.ndarray):
+                adv_indexing = True
+            indx_tuple = (indx,) + (slice(None),) * (self.ndim - 1)
+
+        # the copy-if-adv-indexing logic is not really needed
+        # because we make self.xs immutable
+        # but let's keep this in case we find it useful to make self.xs mutable
+        new_xs = tuple(
+            (
+                copy.copy(x[thisdim_ind])
+                if adv_indexing and not isinstance(thisdim_ind, Sequence | np.ndarray)
+                else x[thisdim_ind]
+            )
+            for thisdim_ind, x in zip(indx_tuple, self.xs)
+            if not isinstance(thisdim_ind, SupportsIndex)
         )
 
-    def __getitem__(self, key):
-        retval = copy.deepcopy(self)
-        retval.x = self.x[key]
-        retval.params_arr = self.params_arr[key]
+        retval = copy.copy(self)
+        retval.xs = new_xs
+        retval.params_arr = self.params_arr[indx]
+        return retval
 
     @property
     def fwhms(self):
@@ -70,9 +160,11 @@ class ModeParams:
             uvalues,
             axis=-1,
             axes_order: Optional[Sequence[int]] = None,
-            ax=None,
+            ax: Optional[Axes] = None,
             remove_nans=False,
+            error_style: Literal['bars', 'fill'] = 'bars',
             kwarg_func: Optional[ModePlotStyler] = None,
+            fill_kw_func: Optional[ModePlotStyler] = None,
     ):
         '''
         axis: int
@@ -88,10 +180,12 @@ class ModeParams:
         '''
         if ax is None:
             fig, ax = plt.subplots()
+            ax = cast(Axes, ax)
 
+        positive_axis = axis % len(self.xs)
         if axes_order is None:
             axes_order = list(range(len(self.xs)))
-            axes_order.pop(axis)
+            axes_order.pop(positive_axis)
 
         axis_x = self.xs[axis]
 
@@ -105,12 +199,13 @@ class ModeParams:
             fullslice = slice(None, None, None)
 
             # ordered according to storage order
-            this_iter_slice = tuple(
-                fullslice if i == axis else multi_ind[axes_order.index(i)]
+            # type annotation necessary to keep mypy happy
+            this_iter_slice: tuple[slice | int, ...] = tuple(
+                fullslice if i == positive_axis else multi_ind[axes_order.index(i)]
                 for i in range(len(self.xs))
             )
             uvals = uvalues[this_iter_slice]
-            full_mode_data = self.params_arr[this_iter_slice]
+            full_mode_data = self.params_arr.__getitem__(this_iter_slice)
 
             mask = np.full_like(axis_x, True, dtype=np.bool_)
             if remove_nans:
@@ -120,22 +215,46 @@ class ModeParams:
                 self.xs[axes_order[i]][ind]
                 for i, ind in enumerate(multi_ind)
             ]
-            kwargs = dict(label=xcombo)
+            kwargs: _ErrorbarKwargs = dict(label=xcombo)
             if kwarg_func is not None:
                 kwargs |= kwarg_func(full_mode_data, *xcombo)
 
-            ax.errorbar(
+            if error_style == 'bars':
+                ax.errorbar(
+                    axis_x[mask],
+                    unp.nominal_values(uvals[mask]),
+                    unp.std_devs(uvals[mask]),
+                    **kwargs,
+                )
+                continue
+
+            ebar_container = ax.errorbar(
                 axis_x[mask],
                 unp.nominal_values(uvals[mask]),
-                unp.std_devs(uvals[mask]),
                 **kwargs,
+            )
+            dataline = ebar_container.lines[0]
+
+            fill_kw: _ErrorbarKwargs = dict(
+                color=dataline.get_color(),
+                alpha=0.15,
+                linewidth=0,
+            )
+            if fill_kw_func is not None:
+                fill_kw |= fill_kw_func(full_mode_data, *xcombo)
+
+            ax.fill_between(
+                axis_x[mask],
+                unp.nominal_values(uvals[mask]) - unp.std_devs(uvals[mask]),
+                unp.nominal_values(uvals[mask]) + unp.std_devs(uvals[mask]),
+                **fill_kw,
             )
 
 
 class FabryPerotModeParams(ModeParams):
-    def __init__(self, x, mode_records, fsr):
+    def __init__(self, xs: Sequence[ArrayLike], mode_records, fsr):
         self.fsr = fsr
-        super().__init__(x, mode_records)
+        super().__init__(xs, mode_records)
 
     @property
     def finesses(self):
