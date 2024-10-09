@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import itertools
 from collections.abc import Callable, Sequence
+from numbers import Integral
 from types import EllipsisType
 from typing import (Any, ClassVar, Literal, Optional, Protocol, Self,
                     SupportsIndex, TypedDict, cast)
@@ -26,7 +27,7 @@ class _ErrorbarKwargs(TypedDict, total=False):
 
 
 class ModePlotStyler(Protocol):
-    def __call__(self, mode_data: np.recarray, *xvals: np.number) -> _ErrorbarKwargs: ...
+    def __call__(self, mode_data: NDArray, *xvals: np.number) -> _ErrorbarKwargs: ...
 
 
 RecIndex1D = _ArrayLikeInt_co | slice
@@ -34,6 +35,7 @@ RecIndex1D = _ArrayLikeInt_co | slice
 
 class ModeParams:
     xs: tuple[NDArray[np.number], ...]
+    params_arr: NDArray
     _FIELD_NAMES: ClassVar[tuple[str, ...]] = ('pole_r', 'pole_i', 'res_r', 'res_i')
 
     def __init__(self, xs: Sequence[ArrayLike], mode_records):
@@ -132,6 +134,20 @@ class ModeParams:
         retval.xs = new_xs
         retval.params_arr = self.params_arr[indx]
         return retval
+
+    def transpose(self, axes: Optional[Sequence[Integral]] = None):
+        axes_seq: Sequence[Integral]
+
+        if axes is None:
+            axes_seq = list(np.arange(self.ndim)[::-1])
+        elif np.any(sorted(axes) != np.arange(self.ndim)):
+            raise ValueError
+        else:
+            axes_seq = axes
+
+        retval = copy.copy(self)
+        retval.xs = tuple(self.xs[ind] for ind in axes_seq)
+        retval.params_arr = np.transpose(self.params_arr, axes)
 
     @property
     def fwhms(self):
