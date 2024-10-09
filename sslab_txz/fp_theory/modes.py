@@ -36,6 +36,12 @@ class ScalarLGMode:
         return VectorLGMode(self.nplus, self.nminus, righthand)
 
     def normed_field(self, rho, theta):
+        '''
+        rho: array_like
+            Radial coordinate, normalized by w / sqrt(2)
+        theta: array_like
+            Azimuthal angle
+        '''
         rho = np.asarray(rho)
         theta = np.asarray(theta)
 
@@ -74,6 +80,8 @@ class VectorLGMode(ScalarLGMode):
 
 
 class ModeBasis(object):
+    modes: tuple[ScalarLGMode]
+
     def __init__(self, modes):
         self.modes = tuple(modes)
         self.reverse_dict = {
@@ -105,10 +113,10 @@ class ModeBasis(object):
         '''
         Parameters
         ----------
-        arr: (shape1, M) array_like
+        arr: array_like, (shape1, M)
             array of fields to evaluate; last dimension must be same length as
             basis
-        rho, theta: (shape2) array_like
+        rho, theta: array_like, (shape2,)
             array_likes of identical shape with normalized radii and azimuthal
             angles at which to evaluate
 
@@ -159,8 +167,6 @@ class ModeBasis(object):
 
 
 class ScalarModeBasis(ModeBasis):
-    modes: Sequence[ScalarLGMode]
-
     @classmethod
     def make_transverse_mode_basis(cls, orders: Sequence[int]):
         modes = tuple(itertools.chain(*[
