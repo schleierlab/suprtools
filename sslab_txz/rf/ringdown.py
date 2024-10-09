@@ -26,8 +26,6 @@ from sslab_txz.plotting import sslab_style
 from sslab_txz.rf.cw import CWMeasurement
 from sslab_txz.rf.errors import FitFailureError
 
-from . import img
-
 
 class RingdownSet(CWMeasurement):
     functional_form = (
@@ -385,7 +383,9 @@ class Ringdown(RingdownSet):
             sslab_style(ax)
 
         if onering:
-            imfile = importlib.resources.files(img) / 'onering_wikipedia.png'
+            # we use a str ('.img') as the anchor here instead of an import `from . import img`
+            # because that doesn't work with strict editable installs
+            imfile = importlib.resources.files('.img') / 'onering_wikipedia.png'
 
             # imfile (Traversable) can be passed to open()
             # but typeshed annotation for open() doesn't support Traversable
