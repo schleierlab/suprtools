@@ -94,13 +94,22 @@ class ModeParams:
         indx_tuple: tuple[SupportsIndex | slice, ...]
         adv_indexing = False
         if isinstance(indx, tuple):
-            if any(isinstance(elt, Sequence | np.ndarray) for elt in indx):
-                raise NotImplementedError('Advanced indexing not supported')
+            sequence_elements = [isinstance(elt, Sequence | np.ndarray) for elt in indx]
+            if np.sum(sequence_elements) > 1:
+                raise ValueError('>1D advanced indexing not supported')
+            # if np.sum(sequence_elements) == 1 and not sequence_elements[0]:
+            #     raise ValueError('Advanced indexing only supported for first dimension')
 
-            if np.newaxis in indx:
+            # can't do np.newaxis in indx because this doesn't work with NDArrays
+            # can't use equality (==) because NDArrays override that too
+            # we rely on np.newaxis being None and None being a singleton here
+            if any(indx_elt is np.newaxis for indx_elt in indx):
                 raise ValueError('Cannot insert newaxis into ModeParams')
 
-            ellipsis_occurrences = np.sum(np.asarray(indx) == Ellipsis)
+            # can't np.asarray(indx) or indx_elt == Ellipsis;
+            # these fail when there are NDArrays in indx
+            ellipsis_occurrences = sum(indx_elt is Ellipsis for indx_elt in indx)
+
             if ellipsis_occurrences >= 2:
                 raise ValueError('Cannot use ... twice')
             elif ellipsis_occurrences == 1:
@@ -127,7 +136,10 @@ class ModeParams:
                 else x[thisdim_ind]
             )
             for thisdim_ind, x in zip(indx_tuple, self.xs)
-            if not isinstance(thisdim_ind, SupportsIndex)
+            if (
+                isinstance(thisdim_ind, Sequence | np.ndarray)
+                or not isinstance(thisdim_ind, SupportsIndex)
+            )  # drops dimensions where we take a single index
         )
 
         retval = copy.copy(self)

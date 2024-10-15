@@ -54,3 +54,8 @@ class TestModeParams:
         mp = modeparams_3d[[1, 2]]
         check_xs_equality(mp.xs, [[13, 17], [23, 25, 29], [31, 37]])
         np.testing.assert_array_equal(mp.params_arr, modeparams_3d.params_arr[[1, 2]])
+
+    def test_getitem_tuple_single_ndarray(self, modeparams_3d: FabryPerotModeParams):
+        mp = modeparams_3d[:, np.array([0, 2])]
+        check_xs_equality(mp.xs, [[11, 13, 17, 19], [23, 29], [31, 37]])
+        np.testing.assert_array_equal(mp.params_arr, modeparams_3d.params_arr[:, np.array([0, 2])])
