@@ -136,8 +136,23 @@ class ModeBasis(object):
         )
 
     def plot_field_intensity(self, vector, projection='polar', ax=None, **kwargs):
+        '''
+        Plot the intensity of an arbitrary mode in the subspace spanned
+        by the basis.
+
+        Parameters
+        ----------
+        vector
+            The vector specifying the desired mode in this basis.
+        projection: {'rectilinear', 'polar'}
+        ax: Axes, optional
+            An Axes to plot the mode intensity in. If not specified,
+            a fresh Axes is created.
+        kwargs
+            Passed to matplotlib.Axes.pcolormesh
+        '''
         if ax is None:
-            fig, ax = plt.subplots(subplot_kw=dict(projection='polar'))
+            fig, ax = plt.subplots(subplot_kw=dict(projection=projection))
 
         ax.set_aspect(1)
 
@@ -161,8 +176,7 @@ class ModeBasis(object):
             avals,
             bvals,
             np.sum(np.abs(self.eval_field(vector, rss, thetass))**2, axis=-1),
-            rasterized=True,
-            **kwargs
+            **(dict(rasterized=True) | kwargs),
         )
 
 
