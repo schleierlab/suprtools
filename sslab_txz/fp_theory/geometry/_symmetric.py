@@ -212,7 +212,7 @@ class SymmetricCavityGeometry(CavityGeometry):
         h_vec_cyc = - h_vec_dimless / (2 * pi_k_rm)
 
         # [(operator, activation_bool, cross_coupling_bool)*]
-        cyc_ops_configs = [
+        cyc_ops_configs: list[tuple[VectorModeOperator, bool, bool]] = [
             (h_prop_cyc.vectorize(), config.prop, config.prop_xcoupling),
             (h_wave_cyc.vectorize(), config.wave, config.wave_xcoupling),
             (h_vec_cyc, config.vec, config.vec_xcoupling),
