@@ -286,6 +286,7 @@ class WideScanNetwork(rf.Network):
                 subnet.f / 1e9 - fsr_guess_ghz * offset,
                 rf.complex_2_db(subnet.s.flatten() * scale),
                 label=fr'${offset:+d}\times {fsr_guess_ghz}$ GHz',
+                rasterized=True,
                 **kwargs,
             )
 
@@ -307,6 +308,7 @@ class WideScanNetwork(rf.Network):
                     subnet.f[200:] / 1e9 - fsr_guess_ghz * offset,
                     filtered_magnitude,
                     label=fr'${offset:+d}\times {fsr_guess_ghz}$ GHz',
+                    rasterized=True,
                     **kwargs,
                 )
                 # ax.plot(
