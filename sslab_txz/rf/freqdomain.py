@@ -19,6 +19,8 @@ from skrf.network import Network
 from tqdm import tqdm
 from uncertainties import ufloat, unumpy
 
+from sslab_txz.fp_theory.coupling import CouplingConfig
+from sslab_txz.fp_theory.geometry._symmetric import SymmetricCavityGeometry
 from sslab_txz.plotting import sslab_style
 from sslab_txz.rf.errors import FitFailureError
 
@@ -239,9 +241,10 @@ class WideScanNetwork(rf.Network):
             self,
             center_freq_ghz,
             span_ghz,
-            fsr_guess_ghz,
+            fsr_guess_ghz: float,
             offset_range,
             scale=1,
+            geo: Optional[SymmetricCavityGeometry] = None,
             filt=None,
             fig=None,
             axs=None,
@@ -322,6 +325,45 @@ class WideScanNetwork(rf.Network):
             for ax_db, ax_filt, offset in zip(unfiltered_axs, filtered_axs, offset_iter):
                 ax_db.set_ylabel(f'$|S_{{21}}|$ (dB)\n[+${offset}\\times$ FSR]')
                 ax_filt.set_ylabel("filtered\n(linear)")
+
+        if geo is not None:
+            for ax_group, offset_ind in zip(axs.reshape(len(offset_iter), -1), offset_iter):
+                q_base = int(center_freq_ghz // fsr_guess_ghz) + offset_ind
+                inds = slice(None, None, 2)
+                freq_offset = offset_ind * fsr_guess_ghz * 1e+9
+
+                diag_result = geo.near_confocal_coupling_matrix(
+                    q_base,
+                    CouplingConfig.no_xcoupling,
+                    max_order=8,
+                )
+
+                for i, ax in enumerate(ax_group):
+                    diag_result.annotate_modes(
+                        inds,
+                        offset=freq_offset,
+                        scaling=1e9,
+                        ax=ax,
+                        label=(0.5 if i == len(ax_group) - 1 else False),  # label the last Axes
+                        # color=mode_colorfunc,
+                        # **annotate_kwargs,
+                    )
+                inset_kw_default = dict(
+                    gap=24e+6,
+                    inset_size=0.3,
+                    inset_pad=0.18,
+                    rasterized=True,
+                )
+                inset_kwargs = {**inset_kw_default}  # , **inset_kw}
+                diag_result.plot_mode_insets(
+                    inds,
+                    offset=freq_offset,
+                    scaling=1e9,
+                    fig=fig,
+                    ax=ax_group[0],
+                    projection='polar',
+                    **inset_kwargs,
+                )
 
         for ax in axs:
             sslab_style(ax)
