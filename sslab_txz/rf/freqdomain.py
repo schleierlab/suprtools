@@ -270,6 +270,8 @@ class WideScanNetwork(rf.Network):
                 constrained_layout=True,
             )
             fig.supxlabel('Frequency [GHz]')
+            for ax in axs:
+                sslab_style(ax)
         elif (fig is not None) and (axs is not None):
             pass
         else:
@@ -364,9 +366,6 @@ class WideScanNetwork(rf.Network):
                     projection='polar',
                     **inset_kwargs,
                 )
-
-        for ax in axs:
-            sslab_style(ax)
 
         if filt is None:
             fig.supylabel('$S_{21}$ [dB]')
