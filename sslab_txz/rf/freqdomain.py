@@ -73,7 +73,9 @@ class ScanDataFilter():
         self.sos = scipy.signal.zpk2sos(zz, pz, kz)
 
     def filt(self, data):
-        return scipy.signal.sosfilt(self.sos, data)
+        zi_step = scipy.signal.sosfilt_zi(self.sos)
+        filtered, _ = scipy.signal.sosfilt(self.sos, data, zi=(data[0]*zi_step))
+        return filtered
 
     def bode_plot(self, axs=None):
         if axs is None:
@@ -206,9 +208,6 @@ class WideScanNetwork(rf.Network):
         for ax in axs:
             sslab_style(ax)
 
-        # zi = scipy.signal.sosfilt_zi(sos_filter)
-        # filtered_network, _ = scipy.signal.sosfilt(sos_filter, network.s.flatten(), zi=zi)
-
         filtered_network = filt.filt(self.s.flatten())
 
         ax1, ax2 = axs
@@ -245,7 +244,7 @@ class WideScanNetwork(rf.Network):
             offset_range,
             scale=1,
             geo: Optional[SymmetricCavityGeometry] = None,
-            filt=None,
+            filt: Optional[ScanDataFilter] = None,
             fig=None,
             axs=None,
             **kwargs):
@@ -302,7 +301,7 @@ class WideScanNetwork(rf.Network):
                 subnet = self._subnetwork(offset_center_freq_ghz, span_ghz)
 
                 filtered_magnitude = \
-                    rf.complex_2_magnitude(filt.filt(subnet.s[:, 0, 0] * scale))[200:]
+                    rf.complex_2_magnitude(filt.filt(subnet.s[:, 0, 0] * scale))
                 # noise_floor = np.quantile(filtered_magnitude, 0.99)
                 # peak_inds, _ = scipy.signal.find_peaks(
                 #     filtered_magnitude,
@@ -310,14 +309,14 @@ class WideScanNetwork(rf.Network):
                 #     distance=int(2e6//self.freq_step),
                 # )
                 ax.plot(
-                    subnet.f[200:] / 1e9 - fsr_guess_ghz * offset,
+                    subnet.f / 1e9 - fsr_guess_ghz * offset,
                     filtered_magnitude,
                     label=fr'${offset:+d}\times {fsr_guess_ghz}$ GHz',
                     rasterized=True,
                     **kwargs,
                 )
                 # ax.plot(
-                #     subnet.f[200:][peak_inds] / 1e9 - fsr_guess_ghz * offset,
+                #     subnet.f[peak_inds] / 1e9 - fsr_guess_ghz * offset,
                 #     filtered_magnitude[peak_inds],
                 #     marker='x',
                 #     color='C1',
