@@ -19,7 +19,7 @@ from skrf.network import Network
 from tqdm import tqdm
 from uncertainties import ufloat, unumpy
 
-from sslab_txz.fp_theory.coupling import CouplingConfig
+from sslab_txz.fp_theory.coupling_config import CouplingConfig
 from sslab_txz.fp_theory.geometry._symmetric import SymmetricCavityGeometry
 from sslab_txz.plotting import sslab_style
 from sslab_txz.rf.errors import FitFailureError

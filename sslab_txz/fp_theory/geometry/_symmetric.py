@@ -11,8 +11,8 @@ from uncertainties import unumpy as unp
 
 import sslab_txz.fp_theory.operators as ops
 from sslab_txz._typing import MaybeUFloat
-from sslab_txz.fp_theory.coupling import (CouplingConfig,
-                                          NearConfocalCouplingMatrix)
+from sslab_txz.fp_theory.coupling import NearConfocalCouplingMatrix
+from sslab_txz.fp_theory.coupling_config import CouplingConfig
 from sslab_txz.fp_theory.geometry._base import CavityGeometry
 from sslab_txz.fp_theory.modes import ScalarModeBasis
 from sslab_txz.fp_theory.operators import (ScalarModeOperator,

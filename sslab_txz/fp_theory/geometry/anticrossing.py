@@ -7,7 +7,7 @@ from scipy.constants import c, pi
 from tqdm import tqdm
 from uncertainties import unumpy
 
-from sslab_txz.fp_theory.coupling import CouplingConfig
+from sslab_txz.fp_theory.CouplingConfig import CouplingConfig
 from sslab_txz.fp_theory.geometry import SymmetricCavityGeometry
 from sslab_txz.fp_theory.modes import ScalarModeBasis
 
