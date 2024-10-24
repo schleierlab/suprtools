@@ -1,0 +1,12 @@
+Sensor Model:   {{ name }}
+Serial Number:  {{ serial_number }}
+Data Format:    {{ data_format.value }}      ({{ data_format.string }})
+SetPoint Limit: {{ setpoint_limit }}      (Kelvin)
+Temperature coefficient:  {{ temp_coeff.value }} ({{ temp_coeff.string }})
+Number of Breakpoints:   {{ records|length }}
+
+No.   Units      Temperature (K)
+
+{% for reading, temperature in records -%}
+{{ loop.index }}	{{ '%.5f'|format(reading) }}	{{ '%.3f'|format(temperature) }}
+{% endfor %}

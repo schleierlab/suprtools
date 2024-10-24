@@ -1,0 +1,57 @@
+\documentclass[10pt]{article}
+
+\usepackage{graphicx}
+\usepackage{fancyhdr}
+\usepackage[table]{xcolor}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{siunitx}
+\sisetup{add-integer-zero = false}
+
+((# \AddToHook{cmd/section/before}{\clearpage} #))
+
+\usepackage{titlesec}
+\newcommand{\sectionbreak}{\clearpage}
+
+
+\title{Calibration report}
+\date{}
+
+\begin{document}
+\maketitle
+
+\pagestyle{fancy}
+\fancyhead[L]{%
+  ((( sensor_model )))
+}
+\fancyhead[C]{((( serial_number )))}
+\fancyhead[R]{((( calibration_date )))}
+
+\begin{tabular}{ll}
+  Sensor model & ((( sensor_model ))) \\
+  Serial number & ((( serial_number ))) \\
+  Calibration date & ((( calibration_date ))) \\
+  Calibration details & ((( notes )))
+\end{tabular}
+
+\section{Calibration data}
+
+\begin{center}
+  \includegraphics[width=\textwidth]{caldata.pdf}
+\end{center}
+
+\section{Interpolation table}
+
+\rowcolors{2}{gray!25}{white}
+\begin{longtable}{SSSS}
+  {$T$ [\si{\kelvin}]}
+    & {$R$ [\si{\ohm}]}
+    & {$\frac{dR}{dT}$ [\si{\ohm/\kelvin}]}
+    & {$\frac{d \log R}{d \log T} = \frac{T}{R} \frac{dR}{dT}$} \\
+  \midrule
+  \endhead
+  ((* for temperature, resistance, sensitivity, dimless_sensitivity in records -*))
+    ((( '%#.4g & %#.6g & %#.5g & %#.5g'|format(temperature, resistance, sensitivity, dimless_sensitivity) ))) \\
+  ((* endfor *))
+\end{longtable}
+\end{document}
