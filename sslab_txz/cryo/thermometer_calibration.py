@@ -99,6 +99,7 @@ class TemperatureCoefficient(aenum.Enum):
 
 class ThermometerCalibration(ABC):
     calibration_date: Optional[str] = None
+    fit_temp_range: tuple[float, float]
     temp_range: tuple[float, float]
 
     interp_temps: ClassVar[NDArray[np.float_]] = np.concatenate((
@@ -164,7 +165,7 @@ class ThermometerCalibration(ABC):
 
         t_low: float = self.temp_range[0] if temp_low is None else temp_low
         t_high: float = self.temp_range[1] if temp_high is None else temp_high
-        if not t_low < t_high:
+        if not self.temp_range[0] <= t_low < t_high <= self.temp_range[1]:
             raise ValueError
 
         temps_mask = (t_low <= self.interp_temps) & (t_high >= self.interp_temps)
@@ -202,6 +203,7 @@ class ThermometerCalibration(ABC):
             sensor_model=sensor_model,
             serial_number=serial_number,
             calibration_date=self.calibration_date,
+            calibration_range=self.temp_range,
             notes=notes,
             records=records,
         )
@@ -344,7 +346,7 @@ class ChebyshevFit(ThermometerCalibration):
             raise ValueError
 
         self.calibration_data = calibration_data
-        self.temp_range = temp_range
+        self.fit_temp_range = temp_range
         self.resistance_range = resistance_range
 
         calibration_temps = calibration_data['temp']
@@ -446,21 +448,30 @@ class LogLogPolyFit(ThermometerCalibration):
     def __init__(
             self,
             calibration_data,
-            temp_range,
-            resistance_range,
+            fit_temp_range: tuple[float, float],
+            resistance_range: tuple[float, float],
             fit_order: int,
-            calibration_date: Optional[str],
+            calibration_date: Optional[str] = None,
+            temp_range: Optional[tuple[float, float]] = None,
     ):
         if fit_order < 0:
             raise ValueError
 
         self.calibration_data = calibration_data
         self.calibration_date = calibration_date
-        self.temp_range = temp_range
+        self.fit_temp_range = fit_temp_range
+        self.temp_range = self.fit_temp_range if temp_range is None else temp_range
+        if not (self.fit_temp_range[0]
+                <= self.temp_range[0]
+                < self.temp_range[1]
+                <= self.fit_temp_range[1]):
+            raise ValueError
+
         self.resistance_range = resistance_range
 
         calibration_temps = calibration_data['temp']
-        fit_data_mask = (temp_range[0] <= calibration_temps) & (calibration_temps <= temp_range[1])
+        fit_data_mask = (self.fit_temp_range[0] <= calibration_temps) \
+            & (calibration_temps <= self.fit_temp_range[1])
         self.fit_data = self.calibration_data[fit_data_mask]
 
         model = odr.polynomial(fit_order)
@@ -501,10 +512,14 @@ class LogLogPolyFit(ThermometerCalibration):
         logtemps = np.vectorize(self.logresist_to_logtemp)(np.log10(resistance))
         return 10 ** logtemps
 
-    def dimless_sensitivity(self, temp: ArrayLike) -> ArrayLike:
+    def dimless_sensitivity(self, temp:  ArrayLike) -> ArrayLike:
         '''
         d log(10) R / d log(10) T = sum_{k=1} a_k k (log(10) T)^{k-1} = dR/dT * T/R
         '''
+        temp = np.asarray(temp)
+        if np.any(temp < self.fit_temp_range[0]) | np.any(temp > self.fit_temp_range[1]):
+            raise ValueError
+
         # k = 1 to polynomial deg
         poly_coeffs = self.odr_result.beta[1:] * np.arange(1, self.fit_order + 1)
 
@@ -540,11 +555,11 @@ class LogLogPolyFit(ThermometerCalibration):
         ax.scatter(self.fit_data['temp'], self.fit_data['resistance'], s=1)
 
         # temp_range = np.linspace(*self.temp_range, 5001)
-        temp_range = np.geomspace(*self.temp_range, 1001)
+        fit_temp_linspace = np.geomspace(*self.fit_temp_range, 1001)
 
         ax.plot(
-            temp_range,
-            self.temp_to_resistance(temp_range),
+            fit_temp_linspace,
+            self.temp_to_resistance(fit_temp_linspace),
             color='red',
             linewidth=1,
         )
