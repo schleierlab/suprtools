@@ -6,7 +6,10 @@
 \usepackage{booktabs}
 \usepackage{longtable}
 \usepackage{siunitx}
-\sisetup{add-integer-zero = false}
+\sisetup{
+  add-integer-zero = false,
+  add-decimal-zero = false,
+}
 
 ((# \AddToHook{cmd/section/before}{\clearpage} #))
 
