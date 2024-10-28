@@ -4,6 +4,7 @@ import re
 import subprocess
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
+from dataclasses import dataclass
 from numbers import Real
 from os import PathLike
 from pathlib import Path
@@ -97,10 +98,20 @@ class TemperatureCoefficient(aenum.Enum):
     POSITIVE = 2, 'Positive'
 
 
-class ThermometerCalibration(ABC):
+@dataclass
+class ThermometerSpec:
+    name: str
+    serial_number: str
+    notes: str = ''
+
+
+class ThermometerCalibration(ThermometerSpec, ABC):
     calibration_date: Optional[str] = None
     fit_temp_range: tuple[float, float]
     temp_range: tuple[float, float]
+    fiducial: Optional[ThermometerSpec]
+    serial_number: str
+    name: str
 
     interp_temps: ClassVar[NDArray[np.float_]] = np.concatenate((
         # `np.arange(0.05, 0.20, 0.01)` would include 0.20, see np.arange docs
@@ -142,14 +153,16 @@ class ThermometerCalibration(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def visualize(self) -> tuple[Figure, Sequence[Axes]]:
+    def plot(self) -> tuple[Figure, Sequence[Axes]]:
         raise NotImplementedError
 
-    def write_interpolation_table(
+    def as_latex(self) -> str:
+        raise NotImplementedError
+
+    def write_pdf(
             self,
             fname: _PathSpec,
             sensor_model: str,
-            serial_number: str,
             temp_low: Optional[float] = None,
             temp_high: Optional[float] = None,
             *,
@@ -201,14 +214,16 @@ class ThermometerCalibration(ABC):
         ))
         rendered_file = template.render(
             sensor_model=sensor_model,
-            serial_number=serial_number,
+            serial_number=self.serial_number,
             calibration_date=self.calibration_date,
             calibration_range=self.temp_range,
+            fiducial_sensor=self.fiducial,
+            fit_details=self.as_latex(),
             notes=notes,
             records=records,
         )
 
-        fig, _ = self.visualize()
+        fig, _ = self.plot()
         fig.savefig(path.parent / 'caldata.pdf')
 
         with open(path, 'w') as fp:
@@ -226,7 +241,6 @@ class ThermometerCalibration(ABC):
             temps: Sequence[float],
             data_format: DataFormat,
             sensor_model: str,
-            serial_number: str,
             setpoint_limit: Optional[float] = None,
     ) -> None:
         if len(temps) <= 1:
@@ -256,9 +270,9 @@ class ThermometerCalibration(ABC):
         ))
         rendered_file = template.render(
             name=sensor_model,
-            serial_number=serial_number,
+            serial_number=self.serial_number,
             data_format=data_format,
-            setpoint_limit=(max(temps) if setpoint_limit is None else setpoint_limit),
+            setpoint_limit=(self.temp_range[1] if setpoint_limit is None else setpoint_limit),
             temp_coeff=temp_coeff,
             records=records,
         )
@@ -266,15 +280,44 @@ class ThermometerCalibration(ABC):
         with open(path, 'w') as fp:
             fp.write(rendered_file)
 
+    def export(
+            self,
+            dir: _PathSpec,
+            interp_temps: Sequence[float],
+            data_format: DataFormat = DataFormat(4),  # LINEAR_LOGOHMS_KELVIN
+            setpoint_limit: Optional[float] = None,
+            notes: Optional[str] = None,
+    ):
+        path = Path(dir)
+        # if path.exists():
+        #     raise FileExistsError
+        path.mkdir(parents=True, exist_ok=False)
+
+        self.write_340_file(
+            path / f'{self.serial_number}.340',
+            interp_temps,
+            data_format,
+            sensor_model=self.name,
+            setpoint_limit=setpoint_limit,
+        )
+
+        self.write_pdf(
+            path / f'{self.serial_number}.tex',
+            sensor_model=self.name,
+            notes=notes,
+        )
+
 
 class LinearInterpolator(ThermometerCalibration):
-    def __init__(self, calibration_data, format: DataFormat):
+    def __init__(self, calibration_data, serial_number: str, format: DataFormat, name: str):
         '''
         calibration_data: structured array, fields ('temp', 'units')
             Calibration data, sorted by increasing resistance.
         '''
         self.calibration_data = calibration_data
         self.format = format
+        self.serial_number = serial_number
+        self.name = name
 
     def temp_to_resistance(self, temp):
         # assumes a negative temperature coefficient
@@ -305,15 +348,25 @@ class LinearInterpolator(ThermometerCalibration):
     def dimless_sensitivity(self, temp):
         return self.sensitivity(temp) * temp / self.temp_to_resistance(temp)
 
+    @staticmethod
+    def _match_regex_group(regex: str, matchstr: str, group: int = 1) -> str:
+        re_match = re.fullmatch(regex, matchstr)
+        if re_match is None:
+            raise Lakeshore340ParseError
+        return re_match.group(group)
+
     @classmethod
     def from_340_file(cls, fname) -> LinearInterpolator:
         with open(fname) as fp:
             for i, line in enumerate(fp):
-                if i == 2:
-                    re_match = re.fullmatch(R'Data Format:\s*(\d+)\s+\(.+\)\n', line)
-                    if re_match is None:
-                        raise Lakeshore340ParseError
-                    data_format_value: int = int(re_match.group(1))
+                if i == 0:
+                    name = cls._match_regex_group(R'Sensor Model:\s*(.+)\n', line)
+                elif i == 1:
+                    serial_number = cls._match_regex_group(R'Serial Number:\s*(.+)\n', line)
+                elif i == 2:
+                    data_format_value: int = int(
+                        cls._match_regex_group(R'Data Format:\s*(\d+)\s+\(.+\)\n', line, group=1),
+                    )
                     break
 
         fmt = DataFormat(data_format_value)
@@ -325,7 +378,7 @@ class LinearInterpolator(ThermometerCalibration):
         #     formats=None,  # type stub doesn't account for default value of `formats`
         #     names=['resistance', 'temp'],
         # )
-        return cls(data, format=fmt)
+        return cls(data, serial_number, format=fmt, name=name)
 
     def plot(self):
         fig, ax = plt.subplots()
@@ -341,13 +394,25 @@ class LinearInterpolator(ThermometerCalibration):
 
 
 class ChebyshevFit(ThermometerCalibration):
-    def __init__(self, calibration_data, temp_range, resistance_range, fit_order: int):
+    def __init__(
+            self,
+            calibration_data,
+            temp_range,
+            resistance_range,
+            fit_order: int,
+            serial_number: str,
+            name: str,
+            fiducial: Optional[ThermometerSpec] = None,
+    ):
         if fit_order < 0:
             raise ValueError
 
         self.calibration_data = calibration_data
         self.fit_temp_range = temp_range
         self.resistance_range = resistance_range
+        self.serial_number = serial_number
+        self.name = name
+        self.fiducial = fiducial
 
         calibration_temps = calibration_data['temp']
         fit_data_mask = (temp_range[0] <= calibration_temps) & (calibration_temps <= temp_range[1])
@@ -405,7 +470,7 @@ class ChebyshevFit(ThermometerCalibration):
         # scipy.optimize.root_scalar(self.resistance_to_temp, )
         raise NotImplementedError
 
-    def visualize(self):
+    def plot(self):
         fig, axs = plt.subplots(
             ncols=2,
             figsize=(8, 4),
@@ -451,6 +516,9 @@ class LogLogPolyFit(ThermometerCalibration):
             fit_temp_range: tuple[float, float],
             resistance_range: tuple[float, float],
             fit_order: int,
+            serial_number: str,
+            name: str,
+            fiducial: Optional[ThermometerSpec] = None,
             calibration_date: Optional[str] = None,
             temp_range: Optional[tuple[float, float]] = None,
     ):
@@ -459,6 +527,9 @@ class LogLogPolyFit(ThermometerCalibration):
 
         self.calibration_data = calibration_data
         self.calibration_date = calibration_date
+        self.serial_number = serial_number
+        self.name = name
+        self.fiducial = fiducial
         self.fit_temp_range = fit_temp_range
         self.temp_range = self.fit_temp_range if temp_range is None else temp_range
         if not (self.fit_temp_range[0]
@@ -482,6 +553,10 @@ class LogLogPolyFit(ThermometerCalibration):
             np.log10(self.fit_data['resistance']),
         )
         self.odr = odr.ODR(odr_data, model, beta0=np.zeros(1 + fit_order))
+
+    def as_latex(self) -> str:
+        template = _latex_jinja_env.get_template('loglogpoly.tex.jinja2')
+        return template.render(coeffs=self.odr_result.beta)
 
     def run(self):
         self.odr_result = self.odr.run()
@@ -542,7 +617,7 @@ class LogLogPolyFit(ThermometerCalibration):
     def from_340_file(self, fname):
         raise NotImplementedError
 
-    def visualize(self):
+    def plot(self):
         fig, axs = plt.subplots(
             nrows=3,
             figsize=(6, 7),

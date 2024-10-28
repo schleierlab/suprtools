@@ -30,13 +30,22 @@
 \fancyhead[C]{((( serial_number )))}
 \fancyhead[R]{((( calibration_date )))}
 
-\begin{tabular}{ll}
-  Sensor model & ((( sensor_model ))) \\
-  Serial number & ((( serial_number ))) \\
-  Calibration date & ((( calibration_date ))) \\
-  Calibration range & \SIrange{((( calibration_range[0]  )))}{((( calibration_range[1] )))}{\kelvin} \\
-  Calibration details & ((( notes )))
-\end{tabular}
+\begin{center}
+  \begin{tabular}{lp{3in}}
+    \toprule
+    Sensor model & ((( sensor_model ))) \\
+    Serial number & ((( serial_number ))) \\
+    \hline
+    Fiducial sensor model & ((( fiducial_sensor.name ))) \\
+    Fiducial sensor serial number & ((( fiducial_sensor.serial_number ))) \\
+    Fiducial sensor notes & ((( fiducial_sensor.notes ))) \\
+    \hline
+    Calibration date & ((( calibration_date ))) \\
+    Calibration range & \SIrange{((( calibration_range[0]  )))}{((( calibration_range[1] )))}{\kelvin} \\
+    Calibration details & ((( notes ))) \\
+    \bottomrule
+  \end{tabular}
+\end{center}
 
 \section{Calibration data}
 
@@ -44,9 +53,15 @@
   \includegraphics[width=\textwidth]{caldata.pdf}
 \end{center}
 
+((* if fit_details is not none *))
+  \section{Fit}
+
+  ((( fit_details )))
+((* endif *))
+
 \section{Interpolation table}
 
-\rowcolors{2}{gray!25}{white}
+\rowcolors{2}{gray!10}{white}
 \begin{longtable}{SSSS}
   {$T$ [\si{\kelvin}]}
     & {$R$ [\si{\ohm}]}
