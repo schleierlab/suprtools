@@ -496,7 +496,9 @@ class WideScanData():
         network_name: str,
         sample_temps: bool = False,
     ):
-        window_files = h5s_path.glob('window*.h5')
+        window_files = tuple(h5s_path.glob('window*.h5'))
+        if len(window_files) == 0:
+            raise ValueError(f'No window files in {h5s_path.absolute()}')
         n = max(int(p.name[6:-3]) for p in window_files) + 1
 
         wide_scan_datas = []
@@ -531,7 +533,9 @@ class WideScanData():
         sample_temps: bool = False,
         raw: bool = False,
     ):
-        window_files = h5s_path.glob('window*.h5')
+        window_files = tuple(h5s_path.glob('window*.h5'))
+        if len(window_files) == 0:
+            raise ValueError(f'No window files in {h5s_path.absolute()}')
         n = max(int(p.name[6:-3]) for p in window_files) + 1
 
         with h5py.File(h5s_path / 'window000.h5') as f:
