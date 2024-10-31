@@ -6,7 +6,6 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
 from numbers import Real
-from os import PathLike
 from pathlib import Path
 from typing import ClassVar, Optional, assert_never, cast
 
@@ -22,6 +21,7 @@ from numpy.typing import ArrayLike, NDArray
 from scipy import odr
 from scipy.optimize import RootResults
 
+from sslab_txz._typing import PathSpec
 from sslab_txz.plotting import sslab_style
 
 _jinja_env = Environment(
@@ -39,8 +39,6 @@ _latex_jinja_env = Environment(
     loader=PackageLoader('sslab_txz.cryo', package_path='templates'),
     autoescape=select_autoescape(),
 )
-
-_PathSpec = str | PathLike[str]
 
 
 class Lakeshore340ParseError(Exception):
@@ -161,7 +159,7 @@ class ThermometerCalibration(ThermometerSpec, ABC):
 
     def write_pdf(
             self,
-            fname: _PathSpec,
+            fname: PathSpec,
             sensor_model: str,
             temp_low: Optional[float] = None,
             temp_high: Optional[float] = None,
@@ -237,7 +235,7 @@ class ThermometerCalibration(ThermometerSpec, ABC):
 
     def write_340_file(
             self,
-            fname: _PathSpec,
+            fname: PathSpec,
             temps: Sequence[float],
             data_format: DataFormat,
             sensor_model: str,
@@ -282,7 +280,7 @@ class ThermometerCalibration(ThermometerSpec, ABC):
 
     def export(
             self,
-            dir: _PathSpec,
+            dir: PathSpec,
             interp_temps: Sequence[float],
             data_format: DataFormat = DataFormat(4),  # LINEAR_LOGOHMS_KELVIN
             setpoint_limit: Optional[float] = None,
