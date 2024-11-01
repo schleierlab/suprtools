@@ -287,10 +287,23 @@ def vecfield_multi_probe_reim(re_tag, im_tag, points):
 
 
 class CurlGradField:
+    '''
+    Encapsulation class for the field patterns returned by the quasi-2D
+    small_fem simulation code.
+    '''
+
     reim_tags: tuple[int, int]
+    '''View tags of the (computed) real and imaginary parts of the field in gmsh'''
+
     symmetry_factor: int
+    '''An integer giving the factor of reduction of the simulation volume
+    vs the corresponding physical volume due to using symmetry'''
+
     nodes: NDArray[np.float_]
+    '''(N, 3) array of coordinates for individual nodes'''
+
     e_field: NDArray[np.complex_]
+    '''(Complex) E-field values computed at each node in `self.nodes`'''
 
     def __init__(
             self,
@@ -326,6 +339,8 @@ class CurlGradField:
     def volume_integral(self) -> float:
         '''
         E* E integrated over the entire mode, accounting for symmetry.
+        Cached after first computation to avoid multiple costly
+        numerical integrations.
         '''
         return radial_integral(*self.reim_tags) * self.symmetry_factor
 
