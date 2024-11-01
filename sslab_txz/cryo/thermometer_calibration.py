@@ -112,10 +112,14 @@ class ThermometerCalibration(ThermometerSpec, ABC):
     name: str
 
     interp_temps: ClassVar[NDArray[np.float_]] = np.concatenate((
-        # `np.arange(0.05, 0.20, 0.01)` would include 0.20, see np.arange docs
-        np.linspace(0.05, 0.20, num=15, endpoint=False),
-        np.arange(0.20, 0.50, 0.02),
-        np.arange(0.50, 1.20, 0.05),
+        # linspace prevents floating pt errs, see arange docs
+        np.linspace(0.006, 0.012, num=12, endpoint=False),
+        np.linspace(0.012, 0.040, num=28, endpoint=False),
+        np.linspace(0.040, 0.060, num=10, endpoint=False),
+        np.linspace(0.060, 0.120, num=12, endpoint=False),
+        np.linspace(0.12, 0.40, num=28, endpoint=False),
+        np.arange(0.40, 0.60, 0.02),
+        np.arange(0.60, 1.20, 0.05),
         np.arange(1.20, 4.00, 0.10),
         np.arange(4.00, 6.00, 0.20),
         np.arange(6.00, 20.0, 0.50),
