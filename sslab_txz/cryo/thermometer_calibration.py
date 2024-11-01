@@ -203,7 +203,7 @@ class ThermometerCalibration(ThermometerSpec, ABC):
         #     header=','.join(interp_table_arr.dtype.names),
         # )
 
-        template = _latex_jinja_env.get_template('interp_table.tex.jinja2')
+        template = _latex_jinja_env.get_template('calibration_report.tex.jinja2')
         records = list(zip(
             temps,
             rs,
