@@ -385,11 +385,13 @@ class WideScanNetwork(rf.Network):
 class WideScanData():
     s11: Optional[WideScanNetwork]
     s21: Optional[WideScanNetwork]
+    name: str
 
-    def __init__(self, s11, s21, metadata):
+    def __init__(self, s11, s21, metadata, name: str = ''):
         self.s11 = s11
         self.s21 = s21
         self.metadata = metadata
+        self.name = name
 
     @staticmethod
     def _get_s_param(
@@ -487,7 +489,7 @@ class WideScanData():
         # formats=None is a workaround for https://github.com/numpy/numpy/issues/26376
         metadata_arr = np.rec.fromrecords((metadata_pt,), names=names, formats=None)
 
-        return cls(s11=s11_net, s21=s21_net, metadata=metadata_arr)
+        return cls(s11=s11_net, s21=s21_net, metadata=metadata_arr, name=network_name)
 
     @classmethod
     def from_windows_nonconsec(
@@ -523,7 +525,7 @@ class WideScanData():
         stitched_s11.drop_non_monotonic_increasing()
         stitched_s21.drop_non_monotonic_increasing()
 
-        return cls(s11=stitched_s11, s21=stitched_s21, metadata=metadata)
+        return cls(s11=stitched_s11, s21=stitched_s21, metadata=metadata, name=network_name)
 
     @classmethod
     def from_windows(
@@ -582,7 +584,7 @@ class WideScanData():
 
         # formats=None is a workaround for https://github.com/numpy/numpy/issues/26376
         metadata_arr = np.rec.fromrecords(metadata, names=names, formats=None)
-        return cls(s11=s11_net, s21=s21_net, metadata=metadata_arr)
+        return cls(s11=s11_net, s21=s21_net, metadata=metadata_arr, name=network_name)
 
     def __add__(self, other):
         s11 = WideScanNetwork(rf.stitch(self.s11, other.s11))
@@ -591,7 +593,7 @@ class WideScanData():
         s21.drop_non_monotonic_increasing()
 
         metadata = np.concatenate((self.metadata, other.metadata))
-        return WideScanData(s11, s21, metadata)
+        return WideScanData(s11, s21, metadata, self.name)
 
 
 RealImagDict = dict[Literal['real', 'imag'], NDArray]
