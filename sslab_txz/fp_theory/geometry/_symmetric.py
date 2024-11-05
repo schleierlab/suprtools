@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 from dataclasses import dataclass
 from fractions import Fraction
@@ -25,6 +27,14 @@ class SymmetricCavityGeometry(CavityGeometry):
     mirror_curv_rad: MaybeUFloat
     eta_astig: MaybeUFloat = 0
     asphere_p: MaybeUFloat = 0  # \tilde{p}, as defined in van Exter et al. (2022), eq. 28.
+
+    def to_nominal(self) -> SymmetricCavityGeometry:
+        return SymmetricCavityGeometry(
+            length=unp.nominal_values(self.length),
+            mirror_curv_rad=unp.nominal_values(self.mirror_curv_rad),
+            eta_astig=unp.nominal_values(self.eta_astig),
+            asphere_p=unp.nominal_values(self.asphere_p),
+        )
 
     @property
     def g(self) -> float:
