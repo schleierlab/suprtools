@@ -1,6 +1,7 @@
 import copy
 import datetime
 import functools
+from fractions import Fraction
 from pathlib import Path
 from typing import Callable, Literal, Optional, Self
 
@@ -328,15 +329,35 @@ class WideScanNetwork(rf.Network):
                 ax_filt.set_ylabel("filtered\n(linear)")
 
         if geo is not None:
+            # TODO merge this logic with the resonance_ratio handling logic in coupling_matrix
+            res_frac = np.arccos(unumpy.nominal_values(geo.g)) / pi  # ~1/2 for near-confocal
+            res_frac_approx = Fraction(res_frac).limit_denominator(3)
+            res_num, res_denom = res_frac_approx.as_integer_ratio()
+
+            group_number = round(1e+9 * center_freq_ghz / geo.fsr * res_denom - res_num)
+
+            # group_number = res_denom * q_base_nooffset + res_num * generalized_parity
+            # generalized_parity ==(mod res_denom) group_number * res_num^(-1)
+            generalized_parity = ((group_number % res_denom) * pow(res_num, -1, mod=res_denom)) \
+                % res_denom
+            q_base_nooffset = int((group_number - res_num * generalized_parity) / res_denom)
+
             for ax_group, offset_ind in zip(axs.reshape(len(offset_iter), -1), offset_iter):
-                q_base = int(center_freq_ghz // fsr_guess_ghz) + offset_ind
+                q_base = q_base_nooffset + offset_ind
+
                 inds = slice(None, None, 2)
                 freq_offset = offset_ind * fsr_guess_ghz * 1e+9
+
+                # plot modes of orders `generalized_parity` mod `res_denom` up to order 8
+                order_limit = 8
+                order_limit_remainder = order_limit % res_denom
+                max_order = order_limit - order_limit_remainder + generalized_parity \
+                    - (res_denom if generalized_parity > order_limit_remainder else 0)
 
                 diag_result = geo.near_confocal_coupling_matrix(
                     q_base,
                     CouplingConfig.no_xcoupling,
-                    max_order=8,
+                    max_order=max_order,
                 )
 
                 for i, ax in enumerate(ax_group):
