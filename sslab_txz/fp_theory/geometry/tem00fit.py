@@ -108,6 +108,7 @@ class TEM00Fit:
             unp.nominal_values(self.freqs),
             params, q=self.qs, pol=self.pols,
             weights=(None if self.freqs_std is None else 1/self.freqs_std),
+            nan_policy='omit',
         )
         return self.result
 
