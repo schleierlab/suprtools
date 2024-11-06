@@ -11,5 +11,6 @@ dependencies = [
   "scipy",
   "openfermion",
   "tqdm",
+  "scikit-image",
   "scikit-rf",
 ]
