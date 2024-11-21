@@ -1,8 +1,14 @@
+'''
+TODO: deprecate/remove unused fitting styles here
+'''
+
 # for forward references; needed until python 3.13
 from __future__ import annotations
 
 import importlib.resources
+import itertools
 from collections.abc import Iterable, Mapping, Sequence
+from pathlib import Path
 from typing import Any, Literal, Optional, cast, overload
 
 import lmfit
@@ -20,9 +26,12 @@ from numpy.typing import NDArray
 from PIL import Image
 from scipy.constants import pi
 from tqdm import tqdm
-from uncertainties import UFloat
+from uncertainties import UFloat, ufloat
+from uncertainties import unumpy as unp
 
+from sslab_txz._typing import StrPath
 from sslab_txz.plotting import sslab_style
+from sslab_txz.plotting.style import kwarg_func_factory
 from sslab_txz.rf.cw import CWMeasurement
 from sslab_txz.rf.errors import FitFailureError
 
@@ -595,3 +604,171 @@ class RingdownScalarFit(RingdownCollectiveFit):
 
         fig.suptitle(f'Fit to ringdown at {self.ringdown_set.frequency:,.0f} Hz')
         return fig._repr_html_()
+
+
+class RingdownSetSweep:
+    def __init__(
+            self,
+            ringdowns: Mapping[float, Mapping[tuple[int, int], RingdownSet]],
+            fsr: float,
+    ):
+        self.ringdowns = ringdowns
+        self.modelist = tuple(next(iter(self.ringdowns.values())))
+        self.stage_positions = sorted(list(self.ringdowns))
+        self.fsr = fsr
+        for single_stage_pos_ringdowns in self.ringdowns.values():
+            assert set(single_stage_pos_ringdowns) == set(self.modelist)
+
+        q_values = [q for q, _ in self.modelist]
+        self.q_range = (min(q_values), max(q_values))
+        self.kwarg_func = kwarg_func_factory(
+            q_range=self.q_range,
+            label='',
+            # markers=('d', '*'),
+        )
+
+    @staticmethod
+    def load_ringdowns(dir, mainpath, modes, exceptiondict=dict()):
+        default_windows = {
+            mode_tuple: (
+                Path(dir) / mainpath / f'window{i:03d}.h5'
+            )
+            for i, mode_tuple in enumerate(modes)
+        }
+
+        windows = default_windows | exceptiondict
+        return {
+            mode_tuple: None if path is None else RingdownSet.from_h5(path)
+            for mode_tuple, path in tqdm(windows.items())
+        }
+
+    @classmethod
+    def from_directories(
+            cls,
+            dir: StrPath,
+            datapaths: Mapping[float, StrPath],
+            modes,
+            fsr: float,
+    ):
+        ringdowns = {
+            stage_pos: cls.load_ringdowns(Path(dir), datapath, modes)
+            for stage_pos, datapath in datapaths.items()
+        }
+        return cls(ringdowns, fsr)
+
+    def fit(self):
+        self.collective_fits = {
+            key: {
+                mode: rdsets_dict[mode].collective_fit()
+                for mode in tqdm(rdsets_dict, leave=True)
+            }
+            for key, rdsets_dict in self.ringdowns.items()
+        }
+
+    @staticmethod
+    def frac_uncert(uarr):
+        return unp.std_devs(uarr) / unp.nominal_values(uarr)
+
+    def extract_finesses(
+            self,
+            a0_uncert_limit=0.3,
+            fwhm_uncert_limit=0.26,
+    ):
+        stagesweep_rd_finesses = {}
+        for q, pol in self.modelist:
+            fits = [
+                self.collective_fits[stage_pos].get((q, pol))
+                for stage_pos in self.stage_positions
+            ]
+            fwhms = np.array([
+                (
+                    fit.fit_result.uvars['fwhm']
+                    if (
+                        fit is not None
+                        and hasattr(fit.fit_result, 'uvars')
+                        and (self.frac_uncert(fit.fit_result.uvars['a0']) < a0_uncert_limit)
+                        and (self.frac_uncert(fit.fit_result.uvars['fwhm']) < fwhm_uncert_limit)
+                    ) else ufloat(np.nan, np.nan)
+                )
+                for fit in fits
+            ])
+            fins = self.fsr / fwhms
+            ringdown_freqs = [fit.ringdown_set.frequency for fit in fits]
+
+            stagesweep_rd_finesses[q, pol] = np.rec.fromarrays(
+                [self.stage_positions, fins, ringdown_freqs],
+                names=['stage_pos', 'finesse', 'freq'],
+            )
+        self.finesses = stagesweep_rd_finesses
+
+    def plot(self, ax_fin=None):
+        if ax_fin is None:
+            _, plot_ax = plt.subplots()
+        else:
+            plot_ax = ax_fin
+
+        for pol, q in itertools.product([+1, -1], range(self.q_range[1], self.q_range[0]-1, -1)):
+            mode_data = self.finesses[q, pol]
+
+            fins = mode_data['finesse']
+
+            fwhms = self.fsr / fins
+            fins_n = unp.nominal_values(fins)
+            fins_s = unp.std_devs(fins)
+            mask = (
+                ~np.isclose(unp.nominal_values(fwhms), 1.0)
+                & ~np.isnan(unp.nominal_values(fins))
+            )
+
+            plot_ax.errorbar(
+                mode_data['stage_pos'][mask],
+                fins_n[mask],
+                fins_s[mask],
+                xerr=0.020,
+                **(
+                    self.kwarg_func(mode_data['freq'].mean(), q, pol)
+                    | dict(alpha=1)
+                ),
+            )
+
+        plot_ax.legend(
+            fontsize='x-small',
+            ncols=2,
+            bbox_to_anchor=(1.01, 0.5),
+            loc='center left',
+        )
+        if ax_fin is None:
+            ax_fin.set_yscale('log')
+            ax_fin.set_ylabel('Finesse')
+            ax_fin.set_xlabel('Probe extension [mm]')
+            sslab_style(ax_fin)
+
+    def plot_highest_finesse(self, ax=None, mask=(lambda q, pol: True), **kwargs):
+        if ax is None:
+            _, plot_ax = plt.subplots()
+        else:
+            plot_ax = ax
+
+        for (q, pol), data_arr in self.finesses.items():
+            if np.all(np.isnan(unp.nominal_values(data_arr['finesse']))):
+                continue
+            if not mask(q, pol):
+                continue
+            best_finesse = np.nanmax(data_arr['finesse'])
+            plot_ax.errorbar(
+                data_arr['freq'].mean() / 1e+9,
+                best_finesse.n,
+                best_finesse.s,
+                **(
+                    self.kwarg_func(data_arr['freq'].mean(), q, pol)
+                    | dict(alpha=1, color='C0')
+                    | kwargs
+                ),
+            )
+
+        if ax is None:
+            plot_ax.set_title(R'All $\mathrm{TEM}_{00}$ modes')
+            plot_ax.set_xlabel('Frequency [GHz]')
+            plot_ax.set_ylabel('Finesse')
+            plot_ax.set_yscale('log')
+            sslab_style(plot_ax)
