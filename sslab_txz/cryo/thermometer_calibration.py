@@ -21,7 +21,7 @@ from numpy.typing import ArrayLike, NDArray
 from scipy import odr
 from scipy.optimize import RootResults
 
-from sslab_txz._typing import PathSpec
+from sslab_txz._typing import StrPath
 from sslab_txz.plotting import sslab_style
 
 # we use a FileSystemLoader instead of a PackageLoader
@@ -168,7 +168,7 @@ class ThermometerCalibration(ThermometerSpec, ABC):
 
     def write_pdf(
             self,
-            fname: PathSpec,
+            fname: StrPath,
             sensor_model: str,
             temp_low: Optional[float] = None,
             temp_high: Optional[float] = None,
@@ -244,7 +244,7 @@ class ThermometerCalibration(ThermometerSpec, ABC):
 
     def write_340_file(
             self,
-            fname: PathSpec,
+            fname: StrPath,
             temps: Sequence[float],
             data_format: DataFormat,
             sensor_model: str,
@@ -289,7 +289,7 @@ class ThermometerCalibration(ThermometerSpec, ABC):
 
     def export(
             self,
-            dir: PathSpec,
+            dir: StrPath,
             interp_temps: Sequence[float],
             data_format: DataFormat = DataFormat(4),  # LINEAR_LOGOHMS_KELVIN
             setpoint_limit: Optional[float] = None,

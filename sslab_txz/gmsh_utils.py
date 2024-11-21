@@ -8,7 +8,7 @@ import numpy as np
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from sslab_txz._typing import PathSpec
+from sslab_txz._typing import StrPath
 
 gmsh.initialize(['-noenv'])
 
@@ -66,8 +66,8 @@ def gmsh_matheval(components, view_tag=-1, timestep=-1, other_view_tag=-1, other
 
 
 def merge_curlgrad_fields(
-        curlpath: PathSpec,
-        gradpath: PathSpec,
+        curlpath: StrPath,
+        gradpath: StrPath,
         eps: float = 1e-12,
 ) -> tuple[tuple[int, int], tuple[int, int]]:
     # gmsh.clear()
@@ -307,9 +307,9 @@ class CurlGradField:
 
     def __init__(
             self,
-            path: PathSpec,
-            curl_file: PathSpec = 'eigenModesCurl.msh',
-            grad_file: PathSpec = 'eigenModesGrad.msh',
+            path: StrPath,
+            curl_file: StrPath = 'eigenModesCurl.msh',
+            grad_file: StrPath = 'eigenModesGrad.msh',
             timestep_reim: tuple[int, int] = (0, 1),
             symmetry_factor: int = 1,
     ):
