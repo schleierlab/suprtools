@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.optimize
 import scipy.special
-from jinja2 import Environment, PackageLoader, select_autoescape
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from numpy.typing import ArrayLike, NDArray
@@ -24,8 +24,13 @@ from scipy.optimize import RootResults
 from sslab_txz._typing import PathSpec
 from sslab_txz.plotting import sslab_style
 
+# we use a FileSystemLoader instead of a PackageLoader
+# for compatibility with strict-mode editable installs
+# (which themselves are necessary for vscode intellisense to work)
+_jinja_loader = FileSystemLoader(Path(__file__).parent / 'templates')
+
 _jinja_env = Environment(
-    loader=PackageLoader('sslab_txz.cryo', package_path='templates'),
+    loader=_jinja_loader,
     autoescape=select_autoescape(),
 )
 
@@ -36,7 +41,7 @@ _latex_jinja_env = Environment(
     variable_end_string=")))",
     comment_start_string="((#",
     comment_end_string="#))",
-    loader=PackageLoader('sslab_txz.cryo', package_path='templates'),
+    loader=_jinja_loader,
     autoescape=select_autoescape(),
 )
 
