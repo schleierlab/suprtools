@@ -1,9 +1,10 @@
 import copy
 import datetime
 import functools
+from collections.abc import Mapping
 from fractions import Fraction
 from pathlib import Path
-from typing import Callable, Literal, Optional, Self
+from typing import Any, Callable, Literal, Optional, Self
 
 import h5py
 import matplotlib.gridspec
@@ -407,12 +408,20 @@ class WideScanData():
     s11: Optional[WideScanNetwork]
     s21: Optional[WideScanNetwork]
     name: str
+    metadata_dict: dict[str, Any]
 
-    def __init__(self, s11, s21, metadata, name: str = ''):
+    def __init__(
+            self,
+            s11, s21,
+            metadata,  # TODO deprecate this
+            name: str = '',
+            metadata_dict: Mapping[str, Any] = dict(),
+    ):
         self.s11 = s11
         self.s21 = s21
         self.metadata = metadata
         self.name = name
+        self.metadata_dict = dict(metadata_dict)
 
     @staticmethod
     def _get_s_param(
@@ -484,6 +493,7 @@ class WideScanData():
         with h5py.File(h5_path) as f:
             freq_obj, s11_arr, s21_arr, metadata_pt = \
                 cls._load_window_data(f, sample_temps=sample_temps)
+            metadata_dict = dict(f.attrs)
 
         s11_net = None
         if s11_arr is not None:
@@ -510,7 +520,12 @@ class WideScanData():
         # formats=None is a workaround for https://github.com/numpy/numpy/issues/26376
         metadata_arr = np.rec.fromrecords((metadata_pt,), names=names, formats=None)
 
-        return cls(s11=s11_net, s21=s21_net, metadata=metadata_arr, name=network_name)
+        return cls(
+            s11=s11_net, s21=s21_net,
+            metadata=metadata_arr,
+            metadata_dict=metadata_dict,
+            name=network_name,
+        )
 
     @classmethod
     def from_windows_nonconsec(
