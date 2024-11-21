@@ -1,4 +1,4 @@
-from typing import Literal, Mapping, Optional, Self, cast
+from typing import Any, Literal, Mapping, Optional, Self, cast
 
 import h5py
 import numpy as np
@@ -11,6 +11,7 @@ class CWMeasurement:
     s21: NDArray[np.complex128]
     t: NDArray[np.float64]
     frequency: float
+    metadata: dict[str, Any]
 
     def __init__(
             self,
@@ -19,6 +20,7 @@ class CWMeasurement:
             frequency: float,
             temperatures: Optional[Mapping[str, float]],
             stage_positions: Optional[Mapping[str, float]],
+            metadata: Mapping[str, Any] = dict(),
     ):
         '''
         Parameters
@@ -40,6 +42,7 @@ class CWMeasurement:
         self.frequency = frequency
         self.temperatures = temperatures
         self.stage_positions = stage_positions
+        self.metadata = dict(metadata)
 
     @property
     def f_sample(self):
@@ -69,18 +72,22 @@ class CWMeasurement:
                 key: getter(key)
                 for key in [
                     'temperature_still',
+                    'temperature_plate',
                     'temperature_sample',
                     'temperature_still_init',
+                    'temperature_plate_init',
                     'temperature_sample_init',
                 ]
             }
+
+            metadata = dict(f.attrs)
 
             stage_positions = {
                 'aaj': f.attrs['aaj_position'],
                 'aak': f.attrs['aak_position'],
             }
 
-        return cls(t, s21, frequency, temperatures, stage_positions)
+        return cls(t, s21, frequency, temperatures, stage_positions, metadata)
 
     def plot_power_spectrum(
             self, ax: Optional[Axes] = None, scale: float = 1, **kwargs):
