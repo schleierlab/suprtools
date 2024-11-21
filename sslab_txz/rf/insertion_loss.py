@@ -75,11 +75,24 @@ class MeasuredLossyLine(LossElement):
             s=rf.db_2_mag(uncertainty_estimate_db),
         )
 
+    # TODO support arbitrary ndims here instead of flattening in loss_db
     @staticmethod
     def _interpolate_network(network: rf.Network, freq: ArrayLike):
+        '''
+        freq: array_like, 0- or 1-dimensional
+        '''
         freq = np.asarray(freq)
-        interpolated_net = network.interpolate(np.atleast_1d(freq), coords='polar')
-        return interpolated_net.s[:, 0, 0].reshape(freq.shape)
+        if freq.ndim >= 2:
+            raise ValueError
+
+        # promote `freq` to 1D, and pass sorted version to interpolator
+        freq_atleast_1d = np.atleast_1d(freq)
+        freq_argsort = np.argsort(freq_atleast_1d)
+        interpolated_net = network.interpolate(freq_atleast_1d[freq_argsort], coords='polar')
+
+        # extract interpolated values and unsort to get original freq list
+        freq_inverse_argsort = np.argsort(freq_argsort)
+        return interpolated_net.s[:, 0, 0][freq_inverse_argsort].reshape(freq.shape)
 
     def uncertainty_db(self, freq):
         return rf.complex_2_db(
