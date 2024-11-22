@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import numpy as np
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
 from scipy.constants import epsilon_0, pi
 
 
@@ -38,6 +38,9 @@ class Probe(ABC):
         array_like, shape (...,)
             Power outcoupling, in watts (W).
         '''
+        electric_field = np.asarray(electric_field)
+        if electric_field.shape[-1] != 3:
+            raise ValueError
         omega = 2 * pi * frequency
 
         # We model the system as an equivalent circuit with a current
@@ -67,7 +70,10 @@ class Probe(ABC):
         return 0.5 * displacement_current_norm_squared * shunt_factor * self.line_impedance
 
     def resonator_coupling_rate(
-            self, electric_field_normalized: ArrayLike, frequency: float) -> ArrayLike:
+            self,
+            electric_field_normalized: ArrayLike,
+            frequency: float,
+    ) -> float | NDArray:
         '''
         Parameters
         ----------
