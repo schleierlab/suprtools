@@ -5,7 +5,7 @@ import numpy as np
 import scipy.constants
 import scipy.integrate
 from numpy.typing import ArrayLike
-from scipy.constants import hbar
+from scipy.constants import c, hbar
 from scipy.constants import k as k_B
 from scipy.constants import mu_0, pi
 
@@ -226,6 +226,15 @@ class Niobium(TypeIISuperconductor):
     def __init__(self, residual_resistivity_ratio, gap_temperature=17.67):
         self.residual_resistivity_ratio = residual_resistivity_ratio
         self.gap_temperature = gap_temperature
+
+
+def roughness_limit_finesse(
+        freq: ArrayLike,
+        roughness_rms: ArrayLike,
+):
+    omega = 2 * pi * np.asarray(freq)
+    roughness_rms = np.asarray(roughness_rms)
+    return pi * c**2 / (2 * omega * roughness_rms)**2
 
 
 def cavity_finesse(
