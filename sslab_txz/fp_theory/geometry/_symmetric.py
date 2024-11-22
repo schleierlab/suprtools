@@ -1,3 +1,8 @@
+'''
+TODO: make most attributes regular numbers (not ufloats),
+add separate support for ufloats
+'''
+
 from __future__ import annotations
 
 import itertools
@@ -42,7 +47,7 @@ class SymmetricCavityGeometry(CavityGeometry):
 
     @property
     def z0(self) -> float:
-        return np.sqrt(self.z1 * (self.mirror_curv_rad - self.z1))
+        return unp.sqrt(self.z1 * (self.mirror_curv_rad - self.z1))
 
     @property
     def z1(self) -> float:
@@ -94,14 +99,14 @@ class SymmetricCavityGeometry(CavityGeometry):
 
     def paraxial_mode_field(self, r, z, freq):
         k = 2 * pi * freq / c
-        w0 = np.sqrt(2 * self.z0 / k)
+        w0 = unp.sqrt(2 * self.z0 / k)
         z_norm = z / self.z0
-        w = w0 * np.sqrt(1 + z_norm**2)
+        w = w0 * unp.sqrt(1 + z_norm**2)
 
         inv_wavefront_curv = z_norm / (1 + z_norm**2) / self.z0
-        gouy_phase = np.arctan(z_norm)
-        return (w0 / w) * np.exp(-(r / w)**2) \
-            * np.cos(k*z + k * r**2 * inv_wavefront_curv / 2 - gouy_phase)
+        gouy_phase = unp.arctan(z_norm)
+        return (w0 / w) * unp.exp(-(r / w)**2) \
+            * unp.cos(k*z + k * r**2 * inv_wavefront_curv / 2 - gouy_phase)
 
     def mode_volume(self, longi_ind: ArrayLike):
         '''
