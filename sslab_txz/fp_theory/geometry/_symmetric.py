@@ -97,7 +97,7 @@ class SymmetricCavityGeometry(CavityGeometry):
         '''
         return self.fsr * (longi_ind + (np.asarray(n_total) + 1) * unp.arccos(self.g) / pi)
 
-    def paraxial_mode_field(self, r, z, freq):
+    def paraxial_scalar_mode_field(self, r, z, freq):
         k = 2 * pi * freq / c
         w0 = unp.sqrt(2 * self.z0 / k)
         z_norm = z / self.z0
