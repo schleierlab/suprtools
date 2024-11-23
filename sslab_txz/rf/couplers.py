@@ -40,7 +40,7 @@ class Probe(ABC):
         '''
         electric_field = np.asarray(electric_field)
         if electric_field.shape[-1] != 3:
-            raise ValueError
+            raise ValueError('E-field array must have last dimension of 3')
         omega = 2 * pi * frequency
 
         # We model the system as an equivalent circuit with a current
