@@ -824,8 +824,8 @@ class RingdownSetSweep:
                 max_log_fin = max(unp.nominal_values(log_finesse))
                 params = self.model.make_params(
                     limit_log_fin=dict(value=max_log_fin, min=max_log_fin-0.3, max=max_log_fin+0.3),
-                    beam_enlarge_factor=dict(value=1, min=0.3, max=2, vary=False),
-                    probe_loss_factor=dict(value=1, min=0.1, max=10),
+                    beam_enlarge_factor=dict(value=1, min=0.8, max=2, vary=True),
+                    probe_loss_factor=dict(value=1, min=0.0003, max=3, vary=True),
                 )
                 frequency = bothpol_data_masked['freq'].mean()
 
