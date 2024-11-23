@@ -9,7 +9,7 @@ import importlib.resources
 import itertools
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Literal, Optional, cast, overload
+from typing import Any, Callable, Literal, Optional, cast, overload
 
 import lmfit
 import matplotlib.pyplot as plt
@@ -30,8 +30,10 @@ from uncertainties import UFloat, ufloat
 from uncertainties import unumpy as unp
 
 from sslab_txz._typing import StrPath
+from sslab_txz.fp_theory.geometry._symmetric import SymmetricCavityGeometry
 from sslab_txz.plotting import sslab_style
 from sslab_txz.plotting.style import kwarg_func_factory
+from sslab_txz.rf.couplers import Probe
 from sslab_txz.rf.cw import CWMeasurement
 from sslab_txz.rf.errors import FitFailureError
 
@@ -630,12 +632,14 @@ class RingdownSetSweep:
     def __init__(
             self,
             ringdowns: Mapping[float, Mapping[tuple[int, int], RingdownSet]],
-            fsr: float,
+            geometry: SymmetricCavityGeometry,
+            stage_pos_converter: Optional[Callable[[NDArray], NDArray]] = None,
     ):
         self.ringdowns = ringdowns
         self.modelist = tuple(next(iter(self.ringdowns.values())))
         self.stage_positions = sorted(list(self.ringdowns))
-        self.fsr = fsr
+        self.geometry = geometry
+        self.stage_pos_converter = stage_pos_converter
         for single_stage_pos_ringdowns in self.ringdowns.values():
             assert set(single_stage_pos_ringdowns) == set(self.modelist)
 
@@ -645,6 +649,12 @@ class RingdownSetSweep:
             q_range=self.q_range,
             label='',
             # markers=('d', '*'),
+        )
+
+        self.model = lmfit.Model(
+            self.log_finesse_model,
+            independent_vars=['probe_r'],
+            param_names=['limit_log_fin', 'beam_enlarge_factor', 'probe_loss_factor'],
         )
 
     @staticmethod
@@ -668,13 +678,14 @@ class RingdownSetSweep:
             dir: StrPath,
             datapaths: Mapping[float, StrPath],
             modes,
-            fsr: float,
+            geometry: SymmetricCavityGeometry,
+            stage_pos_converter: Optional[Callable[[NDArray], NDArray]] = None,
     ):
         ringdowns = {
             stage_pos: cls.load_ringdowns(Path(dir), datapath, modes)
             for stage_pos, datapath in datapaths.items()
         }
-        return cls(ringdowns, fsr)
+        return cls(ringdowns, geometry, stage_pos_converter)
 
     def fit(self):
         self.collective_fits = {
@@ -712,7 +723,7 @@ class RingdownSetSweep:
                 )
                 for fit in fits
             ])
-            fins = self.fsr / fwhms
+            fins = self.geometry.fsr / fwhms
             ringdown_freqs = [fit.ringdown_set.frequency for fit in fits]
 
             stagesweep_rd_finesses[q, pol] = np.rec.fromarrays(
@@ -721,47 +732,162 @@ class RingdownSetSweep:
             )
         self.finesses = stagesweep_rd_finesses
 
-    def plot(self, ax_fin=None):
+    def log_finesse_model(
+            self,
+            probe_r,
+            limit_log_fin,
+            beam_enlarge_factor,
+            probe_loss_factor,
+            freq: float,
+            probe: Probe,
+            probe_z: float,
+    ):
+        fsr = unp.nominal_values(self.geometry.fsr)
+        limit_fwhm = fsr / np.exp(limit_log_fin)
+        probe_field_scalar = unp.nominal_values(
+            self.geometry.paraxial_scalar_beam_field(probe_r / beam_enlarge_factor, probe_z, freq),
+        )
+
+        mode_volume = unp.nominal_values(self.geometry._mode_volume_fromfreq(freq))
+
+        waist_field = unp.nominal_values(self.geometry.paraxial_scalar_beam_field(0, 0, freq))
+        probe_field_vector = np.asarray(probe_field_scalar)[..., np.newaxis] * [1, 0, 0]
+        probe_field_vector_normed = probe_field_vector / np.abs(waist_field) \
+            / np.sqrt(mode_volume)
+        single_coupling_rate = probe.resonator_coupling_rate(probe_field_vector_normed, freq)
+        return np.log(fsr / (2 * single_coupling_rate * probe_loss_factor + limit_fwhm))
+
+    def plot(
+            self,
+            ax_fin: Optional[Axes] = None,
+            plot_modes: Optional[Sequence[int]] = None,
+            probe: Optional[Probe] = None,
+            probe_z: Optional[float] = None,
+            xerr: float = 0.020,
+            **kwargs,
+    ):
+        if (probe is None) != (probe_z is None):
+            raise ValueError('Cannot supply exactly one of probe, probe_z')
+
         if ax_fin is None:
             _, plot_ax = plt.subplots()
         else:
             plot_ax = ax_fin
 
-        for pol, q in itertools.product([+1, -1], range(self.q_range[1], self.q_range[0]-1, -1)):
-            mode_data = self.finesses[q, pol]
+        q_vals = (
+            range(self.q_range[1], self.q_range[0] - 1, -1)
+            if plot_modes is None
+            else plot_modes
+        )
 
+        def mask_mode_data(mode_data):
             fins = mode_data['finesse']
-
-            fwhms = self.fsr / fins
-            fins_n = unp.nominal_values(fins)
-            fins_s = unp.std_devs(fins)
+            fwhms = self.geometry.fsr / fins
             mask = (
                 ~np.isclose(unp.nominal_values(fwhms), 1.0)
                 & ~np.isnan(unp.nominal_values(fins))
+                # we filter out bad fits in extract_finesses()
             )
+            return mode_data[mask]
 
+        for pol, q in itertools.product([+1, -1], q_vals):
+            mode_data_masked = mask_mode_data(self.finesses[q, pol])
+
+            # the parens around lambda expression are important
+            # otherwise the conditional is part of the lambda
+            stage_pos_converter = (
+                (lambda x: x)
+                if self.stage_pos_converter is None
+                else self.stage_pos_converter
+            )
+            converted_stage_pos_masked = stage_pos_converter(mode_data_masked['stage_pos'])
+            frequency = mode_data_masked['freq'].mean()
+            errorbar_kw = (
+                self.kwarg_func(frequency, q, pol)
+                | dict(alpha=1)
+                | kwargs
+            )
             plot_ax.errorbar(
-                mode_data['stage_pos'][mask],
-                fins_n[mask],
-                fins_s[mask],
-                xerr=0.020,
-                **(
-                    self.kwarg_func(mode_data['freq'].mean(), q, pol)
-                    | dict(alpha=1)
-                ),
+                converted_stage_pos_masked,
+                unp.nominal_values(mode_data_masked['finesse']),
+                unp.std_devs(mode_data_masked['finesse']),
+                xerr=xerr,
+                **errorbar_kw,
             )
 
-        plot_ax.legend(
-            fontsize='x-small',
-            ncols=2,
-            bbox_to_anchor=(1.01, 0.5),
-            loc='center left',
-        )
+        if probe is not None:
+            for q in q_vals:
+                bothpol_data = np.concatenate([self.finesses[q, +1], self.finesses[q, -1]])
+                bothpol_data_masked = mask_mode_data(bothpol_data)
+                log_finesse = unp.log(bothpol_data_masked['finesse'])
+
+                max_log_fin = max(unp.nominal_values(log_finesse))
+                params = self.model.make_params(
+                    limit_log_fin=dict(value=max_log_fin, min=max_log_fin-0.3, max=max_log_fin+0.3),
+                    beam_enlarge_factor=dict(value=1, min=0.3, max=2, vary=False),
+                    probe_loss_factor=dict(value=1, min=0.1, max=10),
+                )
+                frequency = bothpol_data_masked['freq'].mean()
+
+                stage_pos = stage_pos_converter(bothpol_data_masked['stage_pos'])
+                fit = self.model.fit(
+                    unp.nominal_values(log_finesse),
+                    params,
+                    weights=1/unp.std_devs(log_finesse),
+                    probe_r=(stage_pos/1e+3),
+                    probe=probe,
+                    probe_z=probe_z,
+                    freq=frequency,
+                )
+
+                print(q, fit.params)
+
+                stage_pos_halfrange = 1e-3 * 0.5 * (
+                    np.max(stage_pos) - np.min(stage_pos)
+                )
+                r_space = 1e-3 * converted_stage_pos_masked.mean() \
+                    + 1.05 * np.linspace(-stage_pos_halfrange, stage_pos_halfrange)
+                plot_kw = (
+                    self.kwarg_func(frequency, q, +1)
+                    | dict(alpha=1, marker=None)
+                    | kwargs
+                    | dict(linestyle='solid', label=None)
+                )
+                plot_ax.plot(
+                    1e+3 * r_space,
+                    np.exp(fit.eval(probe_r=r_space)),
+                    **plot_kw,
+                )
+
         if ax_fin is None:
-            ax_fin.set_yscale('log')
-            ax_fin.set_ylabel('Finesse')
-            ax_fin.set_xlabel('Probe extension [mm]')
-            sslab_style(ax_fin)
+            plot_ax.set_yscale('log')
+            plot_ax.set_ylabel('Finesse')
+            plot_ax.set_xlabel('Probe extension [mm]')
+            plot_ax.legend(
+                fontsize='x-small',
+                ncols=2,
+                bbox_to_anchor=(1.01, 0.5),
+                loc='center left',
+            )
+            sslab_style(plot_ax)
+
+    def highest_finesse_values(self, mask=(lambda q, pol: True)):
+        records = []
+        for (q, pol), data_arr in self.finesses.items():
+            if np.all(np.isnan(unp.nominal_values(data_arr['finesse']))):
+                continue
+            if not mask(q, pol):
+                continue
+            best_finesse = np.nanmax(data_arr['finesse'])
+
+            records.append((
+                q,
+                pol,
+                data_arr['freq'].mean(),
+                best_finesse,
+            ))
+
+        return np.rec.fromrecords(records, names=['q', 'pol', 'freq', 'finesse'])
 
     def plot_highest_finesse(self, ax=None, mask=(lambda q, pol: True), **kwargs):
         if ax is None:
@@ -769,21 +895,18 @@ class RingdownSetSweep:
         else:
             plot_ax = ax
 
-        for (q, pol), data_arr in self.finesses.items():
-            if np.all(np.isnan(unp.nominal_values(data_arr['finesse']))):
-                continue
-            if not mask(q, pol):
-                continue
-            best_finesse = np.nanmax(data_arr['finesse'])
+        highest_finesses = self.highest_finesse_values(mask)
+        for pol in [+1, -1]:
+            highest_finesses_thispol = highest_finesses[highest_finesses['pol'] == pol]
             plot_ax.errorbar(
-                data_arr['freq'].mean() / 1e+9,
-                best_finesse.n,
-                best_finesse.s,
+                highest_finesses_thispol['freq'] / 1e+9,
+                unp.nominal_values(highest_finesses_thispol['finesse']),
+                unp.std_devs(highest_finesses_thispol['finesse']),
                 **(
-                    self.kwarg_func(data_arr['freq'].mean(), q, pol)
-                    | dict(alpha=1, color='C0')
+                    self.kwarg_func(None, highest_finesses_thispol['q'][0], pol)
+                    | dict(alpha=1, color='C0', linestyle='None')
                     | kwargs
-                ),
+                )
             )
 
         if ax is None:
