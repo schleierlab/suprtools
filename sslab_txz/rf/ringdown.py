@@ -744,16 +744,16 @@ class RingdownSetSweep:
     ):
         fsr = unp.nominal_values(self.geometry.fsr)
         limit_fwhm = fsr / np.exp(limit_log_fin)
-        probe_field_scalar = unp.nominal_values(
-            self.geometry.paraxial_scalar_beam_field(probe_r / beam_enlarge_factor, probe_z, freq),
+
+        probe_ufield_scalar_normed = self.geometry.paraxial_scalar_beam_field(
+            probe_r / beam_enlarge_factor,
+            probe_z,
+            freq,
+            norm='volume',
         )
+        probe_field_vector_normed = \
+            unp.nominal_values(probe_ufield_scalar_normed)[..., np.newaxis] * [1, 0, 0]
 
-        mode_volume = unp.nominal_values(self.geometry._mode_volume_fromfreq(freq))
-
-        waist_field = unp.nominal_values(self.geometry.paraxial_scalar_beam_field(0, 0, freq))
-        probe_field_vector = np.asarray(probe_field_scalar)[..., np.newaxis] * [1, 0, 0]
-        probe_field_vector_normed = probe_field_vector / np.abs(waist_field) \
-            / np.sqrt(mode_volume)
         single_coupling_rate = probe.resonator_coupling_rate(probe_field_vector_normed, freq)
         return np.log(fsr / (2 * single_coupling_rate * probe_loss_factor + limit_fwhm))
 

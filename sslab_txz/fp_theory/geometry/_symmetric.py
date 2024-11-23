@@ -8,6 +8,7 @@ from __future__ import annotations
 import itertools
 from dataclasses import dataclass
 from fractions import Fraction
+from typing import Literal, assert_never
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -97,21 +98,33 @@ class SymmetricCavityGeometry(CavityGeometry):
         '''
         return self.fsr * (longi_ind + (np.asarray(n_total) + 1) * unp.arccos(self.g) / pi)
 
-    def paraxial_scalar_mode_field(self, r, z, freq):
+    def paraxial_scalar_mode_field(self, r, z, freq, norm='max'):
         k = 2 * pi * freq / c
         z_norm = z / self.z0
         inv_wavefront_curv = z_norm / (1 + z_norm**2) / self.z0
         gouy_phase = unp.arctan(z_norm)
 
-        return self.paraxial_scalar_beam_field(r, z, freq) \
+        return self.paraxial_scalar_beam_field(r, z, freq, norm=norm) \
             * unp.cos(k*z + k * r**2 * inv_wavefront_curv / 2 - gouy_phase)
 
-    def paraxial_scalar_beam_field(self, r, z, freq):
+    def paraxial_scalar_beam_field(
+            self,
+            r, z, freq,
+            norm: Literal['max', 'volume'] = 'max',
+    ):
         k = 2 * pi * freq / c
         w0 = unp.sqrt(2 * self.z0 / k)
         z_norm = z / self.z0
         w = w0 * unp.sqrt(1 + z_norm**2)
-        return (w0 / w) * unp.exp(-(r / w)**2)
+
+        match norm:
+            case 'max':
+                field_norm_factor = 1
+            case 'volume':
+                field_norm_factor = unp.sqrt(self._mode_volume_fromfreq(freq))
+            case _:
+                assert_never(norm)
+        return (w0 / w) * unp.exp(-(r / w)**2) / field_norm_factor
 
     def mode_volume(self, longi_ind: ArrayLike):
         '''
