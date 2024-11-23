@@ -463,7 +463,14 @@ class RingdownCollectiveFit:
         )
         self.fit_result = lmfit.minimize(self.residual, params)
 
-    def plot_fit(self, ax: Optional[Axes] = None, xscale=1, legend_kw=dict()):
+    def plot_fit(
+            self,
+            ax: Optional[Axes] = None,
+            xscale=1,
+            legend_kw=dict(),
+            xrange: Optional[tuple[Optional[float], Optional[float]]] = None,
+            normalized: bool = False
+    ):
         if ax is None:
             fig, ax = plt.subplots()
         if self.fit_result is None:
@@ -471,15 +478,28 @@ class RingdownCollectiveFit:
         if not hasattr(self.fit_result, 'uvars'):
             raise ValueError
 
+        mask = slice(None)
+        if xrange is not None:
+            x_lo = -np.inf if xrange[0] is None else xrange[0]
+            x_hi = +np.inf if xrange[1] is None else xrange[1]
+            mask = (x_lo <= self.t) & (self.t <= x_hi)
+        masked_time = self.t[mask]
+
         uvars = self.fit_result.uvars
         offset = uvars['offset_re'].n + 1j * uvars['offset_im'].n
+        mean_ringdown_power = \
+            np.mean(np.abs(self.ringdown_set.s21 - offset)**2, axis=0)[mask]
+        fit_values = uvars['const'].n \
+            + uvars['a0'].n * np.exp(-2 * pi * uvars['fwhm'].n * masked_time)
+        norm_factor = fit_values[0] if normalized else 1
+
         ax.plot(
-            xscale * self.t,
-            np.mean(np.abs(self.ringdown_set.s21 - offset)**2, axis=0)
+            xscale * masked_time,
+            mean_ringdown_power / norm_factor,
         )
         ax.plot(
-            xscale * self.t,
-            uvars['a0'].n * np.exp(-2 * pi * uvars['fwhm'].n * self.t) + uvars['const'].n,
+            xscale * masked_time,
+            fit_values / norm_factor,
             color='red',
             label=Rf'$\kappa/2\pi = {uvars['fwhm']:SL} $ Hz',
         )
