@@ -99,14 +99,19 @@ class SymmetricCavityGeometry(CavityGeometry):
 
     def paraxial_scalar_mode_field(self, r, z, freq):
         k = 2 * pi * freq / c
+        z_norm = z / self.z0
+        inv_wavefront_curv = z_norm / (1 + z_norm**2) / self.z0
+        gouy_phase = unp.arctan(z_norm)
+
+        return self.paraxial_scalar_beam_field(r, z, freq) \
+            * unp.cos(k*z + k * r**2 * inv_wavefront_curv / 2 - gouy_phase)
+
+    def paraxial_scalar_beam_field(self, r, z, freq):
+        k = 2 * pi * freq / c
         w0 = unp.sqrt(2 * self.z0 / k)
         z_norm = z / self.z0
         w = w0 * unp.sqrt(1 + z_norm**2)
-
-        inv_wavefront_curv = z_norm / (1 + z_norm**2) / self.z0
-        gouy_phase = unp.arctan(z_norm)
-        return (w0 / w) * unp.exp(-(r / w)**2) \
-            * unp.cos(k*z + k * r**2 * inv_wavefront_curv / 2 - gouy_phase)
+        return (w0 / w) * unp.exp(-(r / w)**2)
 
     def mode_volume(self, longi_ind: ArrayLike):
         '''
@@ -123,7 +128,10 @@ class SymmetricCavityGeometry(CavityGeometry):
         ndarray
             The mode volume, in m^3
         '''
-        wavelength = c / self.paraxial_frequency(longi_ind, 0)
+        return self._mode_volume_fromfreq(self.paraxial_frequency(longi_ind, 0))
+
+    def _mode_volume_fromfreq(self, freq: ArrayLike):
+        wavelength = c / freq
         return self.z0 * self.length * wavelength / 4
 
     def waist_vacuum_field(self, longi_ind: ArrayLike) -> ArrayLike:
