@@ -845,7 +845,8 @@ class RingdownSetSweep:
                 stage_pos_halfrange = 1e-3 * 0.5 * (
                     np.max(stage_pos) - np.min(stage_pos)
                 )
-                r_space = 1e-3 * converted_stage_pos_masked.mean() \
+                stage_pos_midpt = 1e-3 * 0.5 * (np.max(stage_pos) + np.min(stage_pos))
+                r_space = stage_pos_midpt \
                     + 1.05 * np.linspace(-stage_pos_halfrange, stage_pos_halfrange)
                 plot_kw = (
                     self.kwarg_func(frequency, q, +1)
