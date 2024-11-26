@@ -6,7 +6,6 @@ TODO: deprecate/remove unused fitting styles here
 from __future__ import annotations
 
 import importlib.resources
-import itertools
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Callable, Literal, Optional, cast, overload
@@ -22,6 +21,7 @@ from lmfit.minimizer import MinimizerResult
 from lmfit.model import ModelResult
 from lmfit.models import LinearModel
 from matplotlib.axes import Axes
+from matplotlib.container import ErrorbarContainer
 from numpy.typing import NDArray
 from PIL import Image
 from scipy.constants import pi
@@ -629,6 +629,8 @@ class RingdownScalarFit(RingdownCollectiveFit):
 
 
 class RingdownSetSweep:
+    stage_pos_converter: Callable[[NDArray], NDArray]
+
     def __init__(
             self,
             ringdowns: Mapping[float, Mapping[tuple[int, int], RingdownSet]],
@@ -639,7 +641,14 @@ class RingdownSetSweep:
         self.modelist = tuple(next(iter(self.ringdowns.values())))
         self.stage_positions = sorted(list(self.ringdowns))
         self.geometry = geometry
-        self.stage_pos_converter = stage_pos_converter
+        # the parens around lambda expression are important
+        # otherwise the conditional is part of the lambda
+        self.stage_pos_converter = (
+            (lambda x: x)
+            if stage_pos_converter is None
+            else stage_pos_converter
+        )
+
         for single_stage_pos_ringdowns in self.ringdowns.values():
             assert set(single_stage_pos_ringdowns) == set(self.modelist)
 
@@ -765,7 +774,7 @@ class RingdownSetSweep:
             probe_z: Optional[float] = None,
             xerr: float = 0.020,
             **kwargs,
-    ):
+    ) -> dict[int, tuple[ErrorbarContainer, ...]]:
         if (probe is None) != (probe_z is None):
             raise ValueError('Cannot supply exactly one of probe, probe_z')
 
@@ -790,29 +799,28 @@ class RingdownSetSweep:
             )
             return mode_data[mask]
 
-        for pol, q in itertools.product([+1, -1], q_vals):
+        def plot_single_mode(q, pol) -> ErrorbarContainer:
             mode_data_masked = mask_mode_data(self.finesses[q, pol])
-
-            # the parens around lambda expression are important
-            # otherwise the conditional is part of the lambda
-            stage_pos_converter = (
-                (lambda x: x)
-                if self.stage_pos_converter is None
-                else self.stage_pos_converter
-            )
-            converted_stage_pos_masked = stage_pos_converter(mode_data_masked['stage_pos'])
+            converted_stage_pos_masked = self.stage_pos_converter(mode_data_masked['stage_pos'])
             frequency = mode_data_masked['freq'].mean()
             errorbar_kw = (
                 self.kwarg_func(frequency, q, pol)
                 | dict(alpha=1)
                 | kwargs
             )
-            plot_ax.errorbar(
+            return plot_ax.errorbar(
                 converted_stage_pos_masked,
                 unp.nominal_values(mode_data_masked['finesse']),
                 unp.std_devs(mode_data_masked['finesse']),
                 xerr=xerr,
                 **errorbar_kw,
+            )
+
+        ebar_containers = dict[int, tuple[ErrorbarContainer, ...]]()
+        for q in q_vals:
+            ebar_containers[q] = tuple(
+                plot_single_mode(q, pol)
+                for pol in [+1, -1]
             )
 
         if probe is not None:
@@ -829,7 +837,7 @@ class RingdownSetSweep:
                 )
                 frequency = bothpol_data_masked['freq'].mean()
 
-                stage_pos = stage_pos_converter(bothpol_data_masked['stage_pos'])
+                stage_pos = self.stage_pos_converter(bothpol_data_masked['stage_pos'])
                 fit = self.model.fit(
                     unp.nominal_values(log_finesse),
                     params,
@@ -871,6 +879,8 @@ class RingdownSetSweep:
                 loc='center left',
             )
             sslab_style(plot_ax)
+
+        return ebar_containers
 
     def highest_finesse_values(self, mask=(lambda q, pol: True)):
         records = []
