@@ -2,7 +2,6 @@ import copy
 import datetime
 import functools
 from collections.abc import Mapping
-from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable, Literal, Optional, Self
 
@@ -330,9 +329,7 @@ class WideScanNetwork(rf.Network):
                 ax_filt.set_ylabel("filtered\n(linear)")
 
         if geo is not None:
-            # TODO merge this logic with the resonance_ratio handling logic in coupling_matrix
-            res_frac = np.arccos(unumpy.nominal_values(geo.g)) / pi  # ~1/2 for near-confocal
-            res_frac_approx = Fraction(res_frac).limit_denominator(3)
+            res_frac_approx = geo.resonance_frac()
             res_num, res_denom = res_frac_approx.as_integer_ratio()
 
             group_number = round(1e+9 * center_freq_ghz / geo.fsr * res_denom - res_num)

@@ -8,13 +8,13 @@ from __future__ import annotations
 import itertools
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import Literal, assert_never
+from typing import Literal, Optional, assert_never
 
 import numpy as np
 from numpy.typing import ArrayLike
-from scipy.constants import c, epsilon_0
+from scipy.constants import c, epsilon_0, pi
 from scipy.constants import h as planck_h
-from scipy.constants import pi
+from uncertainties import UFloat
 from uncertainties import unumpy as unp
 
 import sslab_txz.fp_theory.operators as ops
@@ -23,8 +23,7 @@ from sslab_txz.fp_theory.coupling import NearConfocalCouplingMatrix
 from sslab_txz.fp_theory.coupling_config import CouplingConfig
 from sslab_txz.fp_theory.geometry._base import CavityGeometry
 from sslab_txz.fp_theory.modes import ScalarModeBasis
-from sslab_txz.fp_theory.operators import (ScalarModeOperator,
-                                           VectorModeOperator)
+from sslab_txz.fp_theory.operators import ScalarModeOperator, VectorModeOperator
 
 
 @dataclass
@@ -48,6 +47,10 @@ class SymmetricCavityGeometry(CavityGeometry):
 
     @property
     def z0(self) -> float:
+        return unp.nominal_values(self.z0_u)
+
+    @property
+    def z0_u(self) -> float:
         return unp.sqrt(self.z1 * (self.mirror_curv_rad - self.z1))
 
     @property
@@ -96,35 +99,47 @@ class SymmetricCavityGeometry(CavityGeometry):
             Frequency of specified mode, in Hz, according to the
             paraxial theory
         '''
-        return self.fsr * (longi_ind + (np.asarray(n_total) + 1) * unp.arccos(self.g) / pi)
+        arccos = np.arccos
+        if isinstance(self.g, UFloat):
+            arccos = unp.arccos
+        return self.fsr * (longi_ind + (np.asarray(n_total) + 1) * arccos(self.g) / pi)
 
     def paraxial_scalar_mode_field(self, r, z, freq, norm='max'):
         k = 2 * pi * freq / c
         z_norm = z / self.z0
         inv_wavefront_curv = z_norm / (1 + z_norm**2) / self.z0
-        gouy_phase = unp.arctan(z_norm)
+
+        arctan = np.arctan
+        cos = np.cos
+        if isinstance(np.asarray(z_norm).flatten()[0], UFloat):
+            arctan = unp.arctan
+            cos = unp.cos
+
+        gouy_phase = arctan(z_norm)
 
         return self.paraxial_scalar_beam_field(r, z, freq, norm=norm) \
-            * unp.cos(k*z + k * r**2 * inv_wavefront_curv / 2 - gouy_phase)
+            * cos(k*z + k * r**2 * inv_wavefront_curv / 2 - gouy_phase)
 
     def paraxial_scalar_beam_field(
             self,
             r, z, freq,
             norm: Literal['max', 'volume'] = 'max',
+            uncert=False,
     ):
+        _np = unp if uncert else np
         k = 2 * pi * freq / c
-        w0 = unp.sqrt(2 * self.z0 / k)
+        w0 = _np.sqrt(2 * self.z0 / k)
         z_norm = z / self.z0
-        w = w0 * unp.sqrt(1 + z_norm**2)
+        w = w0 * _np.sqrt(1 + z_norm**2)
 
         match norm:
             case 'max':
                 field_norm_factor = 1
             case 'volume':
-                field_norm_factor = unp.sqrt(self._mode_volume_fromfreq(freq))
+                field_norm_factor = _np.sqrt(self._mode_volume_fromfreq(freq))
             case _:
                 assert_never(norm)
-        return (w0 / w) * unp.exp(-(r / w)**2) / field_norm_factor
+        return (w0 / w) * _np.exp(-(r / w)**2) / field_norm_factor
 
     def mode_volume(self, longi_ind: ArrayLike):
         '''
@@ -199,19 +214,10 @@ class SymmetricCavityGeometry(CavityGeometry):
             # if not (l == 0 and s == -1)
         ])
 
-    def coupling_matrix(
+    def resonance_frac(
             self,
-            longi_ind_base: int,
-            scalar_basis: ScalarModeBasis,
-            config: CouplingConfig,
-            resonance_ratio: tuple[int, int] | Fraction | float | None,
-    ):
-        '''
-        Parameters
-        ----------
-        resonance_ratio
-            TODO
-        '''
+            resonance_ratio: tuple[int, int] | Fraction | float | None = None,
+    ) -> Fraction:
         match resonance_ratio:
             case (int(num), int(denom)):
                 resonance_frac = Fraction(num, denom)
@@ -227,10 +233,44 @@ class SymmetricCavityGeometry(CavityGeometry):
         if not 0 <= resonance_frac <= 1:
             raise ValueError()
 
+        return resonance_frac
+
+    def _min_order_mode_parax_freq(
+        self,
+        longi_ind_base: int,
+        scalar_basis: ScalarModeBasis,
+        resonance_ratio: tuple[int, int] | Fraction | float | None,
+    ):
+        resonance_frac = self.resonance_frac(resonance_ratio)
         min_basis_order = min(mode.n for mode in scalar_basis)
         min_order_mode_longi_ind = longi_ind_base \
             - resonance_frac.numerator * (min_basis_order // resonance_frac.denominator)
-        paraxial_freq = self.paraxial_frequency(min_order_mode_longi_ind, min_basis_order)
+        return self.paraxial_frequency(min_order_mode_longi_ind, min_basis_order)
+
+
+    def coupling_matrix(
+            self,
+            longi_ind_base: int | None,
+            scalar_basis: ScalarModeBasis,
+            config: CouplingConfig,
+            resonance_ratio: tuple[int, int] | Fraction | float | None,
+            freq: Optional[float] = None,
+    ):
+        '''
+        Parameters
+        ----------
+        resonance_ratio
+            TODO
+        '''
+        if longi_ind_base is None:
+            if freq is None:
+                raise ValueError
+            paraxial_freq = freq
+        else:
+            paraxial_freq = self._min_order_mode_parax_freq(
+                longi_ind_base, scalar_basis, resonance_ratio,
+            )
+
         k = 2 * pi * paraxial_freq / c
         pi_k_rm = pi * k * self.mirror_curv_rad
 
@@ -255,6 +295,7 @@ class SymmetricCavityGeometry(CavityGeometry):
             (h_asphere_cyc.vectorize(), config.asphere, config.asphere_xcoupling),
         ]
 
+        resonance_frac = self.resonance_frac(resonance_ratio)
         h_parax_cyc: ScalarModeOperator = \
             (ops.n_op + 1) * (np.arccos(self.g)/pi - float(resonance_frac))
         matrix, vector_basis = h_parax_cyc.vectorize().toarray(scalar_basis)
