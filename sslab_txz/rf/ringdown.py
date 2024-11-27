@@ -31,7 +31,7 @@ from uncertainties import unumpy as unp
 
 from sslab_txz._typing import StrPath
 from sslab_txz.fp_theory.geometry._symmetric import SymmetricCavityGeometry
-from sslab_txz.plotting import sslab_style
+from sslab_txz.plotting import expand_range, sslab_style
 from sslab_txz.plotting.style import kwarg_func_factory
 from sslab_txz.rf.couplers import Probe
 from sslab_txz.rf.cw import CWMeasurement
@@ -850,12 +850,7 @@ class RingdownSetSweep:
 
                 print(q, fit.params)
 
-                stage_pos_halfrange = 1e-3 * 0.5 * (
-                    np.max(stage_pos) - np.min(stage_pos)
-                )
-                stage_pos_midpt = 1e-3 * 0.5 * (np.max(stage_pos) + np.min(stage_pos))
-                r_space = stage_pos_midpt \
-                    + 1.05 * np.linspace(-stage_pos_halfrange, stage_pos_halfrange)
+                r_space = 1e-3 * np.linspace(*expand_range(stage_pos, factor=1.15))
                 plot_kw = (
                     self.kwarg_func(frequency, q, +1)
                     | dict(alpha=1, marker=None)
