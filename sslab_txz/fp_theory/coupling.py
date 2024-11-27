@@ -4,6 +4,7 @@ import itertools
 from typing import Literal, Optional
 
 import matplotlib.projections
+import matplotlib.transforms
 import numpy as np
 from matplotlib import pyplot as plt
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
@@ -185,7 +186,7 @@ class NearConfocalCouplingMatrix():
             scaling=1e9,
             gap=0.020e+9,
             inset_size=0.25,
-            inset_stagger=0.23,
+            inset_stagger=0.30,
             inset_pad=0.2,
             projection: Literal['polar', 'rectilinear'] = 'polar',
             fig=None,
@@ -215,13 +216,16 @@ class NearConfocalCouplingMatrix():
 
         for eigval, eigvec, inset_level in zip(plot_eigvals, plot_eigvecs, inset_levels):
             plot_freq = (eigval - offset) / scaling
+            offset_trans = matplotlib.transforms.ScaledTranslation(
+                0, inset_stagger * inset_level, fig.dpi_scale_trans,
+            )
             inset_ax = inset_axes(
                 ax,
                 inset_size,
                 inset_size,
                 loc='lower left',
-                bbox_to_anchor=[plot_freq, inset_stagger * inset_level],
-                bbox_transform=ax.get_xaxis_transform(),
+                bbox_to_anchor=[plot_freq, 0],
+                bbox_transform=(ax.get_xaxis_transform() + offset_trans),
                 axes_class=axes_class,
                 borderpad=inset_pad,
             )
