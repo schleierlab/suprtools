@@ -1,9 +1,11 @@
 import re
 from collections.abc import Sequence
+from typing import assert_never, cast
 
 import matplotlib
+import numpy as np
 from matplotlib.axes import Axes
-from matplotlib.figure import Figure
+from matplotlib.figure import Figure, SubFigure
 from matplotlib.ticker import AutoMinorLocator
 
 from ._angleannotation import AngleAnnotation as AngleAnnotation
@@ -54,10 +56,44 @@ def to_roman(n: int) -> str:
     return ''.join(reversed([_digit_to_roman(d, place) for place, d in enumerate(digits_reversed)]))
 
 
-def label_subplots(fig: Figure, axs: Sequence[Axes], label_fmt='(alph)'):
-    for i, ax in enumerate(axs):
+def expand_range(values, factor=1.1):
+    '''
+    Given a set of real values with extrema val_min, val_max,
+    give a pair of numbers lo, hi such that the interval [lo, hi]
+    is centered on [val_min, val_max] and is longer by `factor`.
+    '''
+    halfspan = (max(values) - min(values)) / 2
+    midpt = (max(values) + min(values)) / 2
+    return midpt - halfspan * factor, midpt + halfspan * factor
+
+
+def frexp10(x):
+    exp = int(np.floor(np.log10(abs(x))))
+    return x / 10**exp, exp
+
+
+def latex_frexp10(x):
+    significand, exp = frexp10(x)
+
+    if significand == 1:
+        return fr'10^{{{exp}}}'
+    return fr'{significand} \times 10^{{{exp}}}'
+
+
+def label_subplots(
+        fig: Figure,
+        artists: Sequence[Axes] | Sequence[SubFigure],
+        label_fmt='(alph)',
+        adjust=(5, -5),
+        colors=None,
+):
+    if colors is None:
+        colors = ['black'] * len(artists)
+
+    for i, artist in enumerate(artists):
         # label physical distance in and down:
-        trans = matplotlib.transforms.ScaledTranslation(5/72, -5/72, fig.dpi_scale_trans)
+        adjust_x, adjust_y = adjust
+        trans = matplotlib.transforms.ScaledTranslation(adjust_x/72, adjust_y/72, fig.dpi_scale_trans)
         # label = f'({chr(97 + i)})'
 
         def numsubber(m: re.Match[str]) -> str:
@@ -83,12 +119,24 @@ def label_subplots(fig: Figure, axs: Sequence[Axes], label_fmt='(alph)'):
             label_fmt,
         )
 
-        ax.text(
+        artist = cast(Axes | SubFigure, artist)
+        match artist:
+            case Axes() as ax:
+                transform = ax.transAxes
+                text = ax.text
+            case SubFigure() as subfig:
+                transform = subfig.transSubfigure
+                text = subfig.text
+            case _:
+                assert_never()
+
+        text(
             0.0, 1.0,
             label,
-            transform=ax.transAxes + trans,
+            transform=(transform + trans),
             fontsize='large',
             verticalalignment='top',
+            color=colors[i],
             # fontfamily='serif',
             # bbox=dict(facecolor='0.7', edgecolor='none', pad=3.0),
         )
