@@ -6,6 +6,8 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import AutoMinorLocator
 
+from ._angleannotation import AngleAnnotation as AngleAnnotation
+
 
 def minor_ticks_on(ax, which='both'):
     if ax.get_xscale() != 'log' and which in ['both', 'x']:
