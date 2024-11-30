@@ -204,13 +204,13 @@ class SymmetricCavityGeometry(CavityGeometry):
             self.fsr * (
                 q_base
                 + 0.5
-                + (2*p + abs(l) + 1) * (np.arccos(self.g)/pi - 0.5)
+                + (2*p + abs(ell) + 1) * (np.arccos(self.g)/pi - 0.5)
                 + 1 / (4 * pi * k * self.mirror_curv_rad) * (
-                    2*p**2 + 2*p*l - l**2 + 2*p + l + 2
-                    + 4*l*s - 4
+                    2*p**2 + 2*p*ell - ell**2 + 2*p + ell + 2
+                    + 4*ell*s - 4
                 )
             )
-            for (p, l, s) in even_modes
+            for (p, ell, s) in even_modes
             # if not (l == 0 and s == -1)
         ])
 
