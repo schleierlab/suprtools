@@ -158,3 +158,55 @@ def watermark(ax: Axes, text: str, **kwargs):
         fontdict=None,  # redundant line for mypy
         **(default_kw | kwargs),
     )
+
+
+def annotate_length(
+        ax,
+        text,
+        left_endpt,
+        right_endpt,
+        offset_points=8,
+        horizontalalignment='center',
+        verticalalignment='center',
+        reverse=False,
+        arrowprops=dict(),
+):
+    left_endpt = np.asarray(left_endpt)
+    right_endpt = np.asarray(right_endpt)
+
+    midpt = (left_endpt + right_endpt) / 2
+    arrowprops_default = dict(
+        arrowstyle='<|-|>',
+        # width=0.5,
+        # headwidth=4,
+        # headlength=8,
+        color='0.3',
+        shrinkA=1,
+        shrinkB=1,
+    )
+    ax.annotate(
+        '',
+        xy=left_endpt,
+        xycoords=ax.transData,
+        xytext=right_endpt,
+        textcoords=ax.transData,
+        arrowprops=(arrowprops_default | arrowprops),
+    )
+
+    linevec_x, linevec_y = right_endpt - left_endpt
+    normalvec = np.array([linevec_y, -linevec_x])
+    normalvec /= np.linalg.norm(normalvec)
+    if normalvec[1] < 0:
+        normalvec = -normalvec
+    elif normalvec[1] == 0 and normalvec[0] < 0:
+        normalvec = -normalvec
+
+    ax.annotate(
+        text,
+        xy=midpt,
+        xycoords=ax.transData,
+        xytext=normalvec * offset_points * (-1 if reverse else +1),
+        textcoords='offset points',
+        horizontalalignment=horizontalalignment,
+        verticalalignment=verticalalignment,
+    )
