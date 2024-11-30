@@ -364,3 +364,36 @@ class SymmetricCavityGeometry(CavityGeometry):
             config,
             resonance_ratio=(1, 2),
         )
+
+
+@dataclass
+class FiniteMirrorSymmetricCavity:
+    geometry: SymmetricCavityGeometry
+    mirror_radius: float
+    mirror_center_thick: float
+
+    @property
+    def length(self):
+        return self.geometry.length
+
+    def mirror_z(self, r):
+        return self.geometry.length / 2 - self.geometry.mirror_curv_rad + unp.sqrt(self.geometry.mirror_curv_rad**2 - r**2)
+
+    @property
+    def edge_z(self):
+        return self.mirror_z(self.mirror_radius)
+
+    @property
+    def back_z(self):
+        return self.geometry.length / 2 + self.mirror_center_thick
+
+    @property
+    def sag(self):
+        return self.geometry.length / 2 - self.mirror_z(self.mirror_radius)
+
+    def offset_z_from_edge(self, offset: float):
+        return self.geometry.length / 2 - self.sag - offset
+
+    @property
+    def lateral_numerical_aperture(self):
+        return np.sin(np.arctan(self.edge_z / self.mirror_radius))
