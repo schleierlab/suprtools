@@ -68,6 +68,20 @@ class RingdownSet(CWMeasurement):
             self.t, self.s21.mean(axis=0), self.frequency, None, self.stage_positions,
         )
 
+    def _time_mask(
+            self,
+            xrange: Optional[tuple[Optional[float], Optional[float]]] = None,
+            t: Optional[NDArray] = None,
+    ):
+        mask: slice | NDArray = slice(None)
+        t_arr = self.t if t is None else t
+        if xrange is not None:
+            x_lo = -np.inf if xrange[0] is None else xrange[0]
+            x_hi = +np.inf if xrange[1] is None else xrange[1]
+            mask = (x_lo <= t_arr) & (t_arr <= x_hi)
+
+        return mask
+
     @overload
     def __getitem__(self, key: int) -> Ringdown: ...
     @overload
@@ -240,7 +254,12 @@ class RingdownSet(CWMeasurement):
         fit.fit()
         return fit
 
-    def visualize(self, onering: bool = False):
+    def visualize(
+            self,
+            xrange: Optional[tuple[Optional[float], Optional[float]]] = None,
+            xscale=1e+6,
+            onering: bool = False,
+    ):
         raise NotImplementedError
 
 
@@ -316,21 +335,95 @@ class Ringdown(RingdownSet):
                 kws=dict(data=s21),
             )
 
-    def plot_cartesian(self, scale=1, ax: Optional[Axes] = None, **kwargs):
+    def plot_cartesian(
+            self,
+            xrange: Optional[tuple[Optional[float], Optional[float]]] = None,
+            scale=1,
+            ax: Optional[Axes] = None,
+            **kwargs,
+    ):
         if ax is None:
             fig, ax = plt.subplots()
             ax = cast(Axes, ax)
-
-        ax.set_aspect(1)
-        ax.set_box_aspect(1)
+            ax.set_aspect(1)
+            ax.set_box_aspect(1)
+        mask = self._time_mask(xrange)
         ax.plot(
-            *rf.complex_2_reim(scale * self.s21[0]),
+            *rf.complex_2_reim(scale * self.s21[0][mask]),
             **kwargs,
         )
 
-    def visualize(self, onering: bool = False):
-        s21 = self.s21[0]
+    def plot_polar(
+            self,
+            xrange: Optional[tuple[Optional[float], Optional[float]]] = None,
+            scale=1,
+            ax: Optional[Axes] = None,
+            offset: complex = 0,
+            **kwargs,
+    ):
+        if ax is None:
+            fig, ax = plt.subplots(subplot_kw=dict(projection='polar'))
+            ax = cast(Axes, ax)
+            ax.set_aspect(1)
+            ax.set_box_aspect(1)
 
+        mask = self._time_mask(xrange)
+        complex_data = scale * (self.s21[0][mask] - offset)
+        ax.plot(
+            rf.complex_2_radian(complex_data),
+            rf.complex_2_magnitude(complex_data),
+            **kwargs,
+        )
+
+    def plot_db(
+            self,
+            xrange: Optional[tuple[Optional[float], Optional[float]]] = None,
+            xscale=1e+6,
+            ax: Optional[Axes] = None,
+            offset: complex = 0,
+            **kwargs,
+    ):
+        if ax is None:
+            _, ax = plt.subplots()
+
+        mask = self._time_mask(xrange)
+        masked_time = self.t[mask]
+
+        ax.plot(
+            xscale * masked_time,
+            rf.complex_2_db(self.s21[0, mask] - offset),
+            label=fr'$\omega/2\pi$ = {self.frequency / 1e+9:.9f} GHz',
+            **kwargs,
+        )
+        ax.legend(fontsize='x-small')
+        ax.set_ylabel('$|S_{21}|$ [dB]')
+
+    def plot_phase(
+            self,
+            xrange: Optional[tuple[Optional[float], Optional[float]]] = None,
+            xscale=1e+6,
+            ax: Optional[Axes] = None,
+            offset: complex = 0,
+            **kwargs,
+    ):
+        if ax is None:
+            _, ax = plt.subplots()
+
+        mask = self._time_mask(xrange)
+        masked_time = self.t[mask]
+        ax.plot(
+            xscale * masked_time,
+            np.unwrap(rf.complex_2_degree(self.s21[0, mask] - offset), period=360) / 360,
+            **kwargs,
+        )
+        ax.set_ylabel(R'$\angle S_{21} / 2\pi$')
+
+    def visualize(
+            self,
+            xrange: Optional[tuple[Optional[float], Optional[float]]] = None,
+            xscale=1e+6,
+            onering: bool = False,
+    ):
         fig, axs = plt.subplot_mosaic(
             [
                 ['db', 'reim'],
@@ -342,32 +435,26 @@ class Ringdown(RingdownSet):
         axs['reim'].set_aspect(1)
         axs['reim'].set_box_aspect(1)
 
-        axs['db'].plot(
-            1e+6 * self.t,
-            rf.complex_2_db(s21),
-            label=fr'$\omega/2\pi$ = {self.frequency / 1e+9:.9f} GHz',
-        )
-
-        axs['deg'].plot(
-            1e+6 * self.t,
-            np.unwrap(rf.complex_2_degree(s21), period=360),
-        )
+        self.plot_db(xrange, xscale, ax=axs['db'])
+        self.plot_phase(xrange, xscale, ax=axs['deg'])
 
         reim_scale = 1e+6
         reim_scale_latex = '10^6'
         self.plot_cartesian(ax=axs['reim'], scale=reim_scale)
 
         if hasattr(self, 'fit') and hasattr(self.fit, 'uvars'):
-            model_val = self.fit.eval(t=self.t_fit)
+            mask_tfit = self._time_mask(xrange, t=self.t_fit)
+            masked_tfit = self.t_fit[mask_tfit]
+            model_val = self.fit.eval(t=masked_tfit)
             axs['db'].plot(
-                1e+6 * self.t_fit,
+                xscale * masked_tfit,
                 rf.complex_2_db(model_val),
                 label=(
                     fr'$\kappa/2\pi = {self.fit.uvars["fwhm"]:SL}$ Hz'
                 )
             )
             axs['deg'].plot(
-                1e+6 * self.t_fit,
+                xscale * masked_tfit,
                 np.unwrap(rf.complex_2_degree(model_val), period=360),
                 label=(
                     R'$\Delta\omega \equiv \omega - \omega_0 = '
@@ -380,12 +467,9 @@ class Ringdown(RingdownSet):
                 label=Ringdown.functional_form,
             )
 
-        axs['db'].legend(fontsize='x-small')
         axs['deg'].legend(fontsize='x-small')
         axs['reim'].legend(fontsize='x-small')
 
-        axs['db'].set_ylabel('$|S_{21}|$ [dB]')
-        axs['deg'].set_ylabel(R'$\angle S_{21}$ [deg]')
         axs['deg'].set_xlabel(R'Time [$\mu$s]')
         axs['reim'].set_xlabel(fR'${reim_scale_latex} \times \operatorname{{Re}} S_{{21}}$')
         axs['reim'].set_ylabel(fR'${reim_scale_latex} \times \operatorname{{Im}} S_{{21}}$')
@@ -469,9 +553,11 @@ class RingdownCollectiveFit:
             self,
             ax: Optional[Axes] = None,
             xscale=1,
+            data_kw=dict(),
+            model_kw=dict(),
             legend_kw=dict(),
             xrange: Optional[tuple[Optional[float], Optional[float]]] = None,
-            normalized: bool = False
+            normalized: bool = False,
     ):
         if ax is None:
             fig, ax = plt.subplots()
@@ -480,11 +566,7 @@ class RingdownCollectiveFit:
         if not hasattr(self.fit_result, 'uvars'):
             raise ValueError
 
-        mask = slice(None)
-        if xrange is not None:
-            x_lo = -np.inf if xrange[0] is None else xrange[0]
-            x_hi = +np.inf if xrange[1] is None else xrange[1]
-            mask = (x_lo <= self.t) & (self.t <= x_hi)
+        mask = self.ringdown_set._time_mask(xrange)
         masked_time = self.t[mask]
 
         uvars = self.fit_result.uvars
@@ -498,12 +580,17 @@ class RingdownCollectiveFit:
         ax.plot(
             xscale * masked_time,
             mean_ringdown_power / norm_factor,
+            **data_kw,
+        )
+
+        model_kw_default = dict(
+            color='red',
+            label=Rf'$\kappa/2\pi = {uvars['fwhm']:SL} $ Hz',
         )
         ax.plot(
             xscale * masked_time,
             fit_values / norm_factor,
-            color='red',
-            label=Rf'$\kappa/2\pi = {uvars['fwhm']:SL} $ Hz',
+            **(model_kw_default | model_kw),
         )
         ax.set_yscale('log')
         ax.legend(**legend_kw)
@@ -848,7 +935,7 @@ class RingdownSetSweep:
                     freq=frequency,
                 )
 
-                print(q, fit.params)
+                print(f'{q=}, beam_enlarge fudge: {fit.uvars['beam_enlarge_factor']:S}, probe_loss fudge: {fit.uvars['probe_loss_factor']:S}')
 
                 r_space = 1e-3 * np.linspace(*expand_range(stage_pos, factor=1.15))
                 plot_kw = (
