@@ -14,18 +14,28 @@ from sslab_txz.fp_theory.modes import ScalarModeBasis
 
 class AnticrossingFit:
     def __init__(self, modedata, ansatz_power=-1):
-        '''
-        modedata
-        '''
+        """
+        Parameters
+        ----------
+        modedata: structured numpy array
+            A structured array (dtype: [q, branch, freq]) such that each
+            record is an ordered triple consisting of the mode index q,
+            the branch of the anticrossing feature (+1 for upper branch,
+            -1 for lower branch), and freq is the mode frequency.
+        ansatz_power: float, optional (default: -1)
+            The frequency-dependence we assume of the coupling strength.
+            The default of -1 corresponds to V ~ 1/k.
+        """
         self.modedata = modedata
         self.ansatz_power = ansatz_power
 
     def _mixed_mode_coupling_numbers_single(
-            self,
-            q_branch: tuple[int, int],
-            geometry: Optional[SymmetricCavityGeometry] = None,
-            coupling_param: Optional[float] = None):
-        '''
+        self,
+        q_branch: tuple[int, int],
+        geometry: Optional[SymmetricCavityGeometry] = None,
+        coupling_param: Optional[float] = None,
+    ):
+        """
         Returns m, delta, |g| of the coupling matrix
         [
             [m + delta  , g         ],
@@ -43,7 +53,7 @@ class AnticrossingFit:
             +/- exp(i arg(g)) sqrt((1 +/- sin(beta)) / 2),
             sqrt((1 -/+ sin(beta)) / 2),
         ]
-        '''
+        """
         q, _ = q_branch
 
         if geometry is None:
@@ -55,7 +65,7 @@ class AnticrossingFit:
             q,
             ScalarModeBasis.make_single_order_basis(0),
             CouplingConfig.no_xcoupling,
-            resonance_ratio=1/2,
+            resonance_ratio=(1 / 2),
         )
         frequency_prediction_00 = coupling_00.eigvals.mean()
 
@@ -63,7 +73,7 @@ class AnticrossingFit:
             q,
             ScalarModeBasis.make_single_order_basis(4),
             CouplingConfig.no_xcoupling,
-            resonance_ratio=1/2,
+            resonance_ratio=(1 / 2),
         )
         frequency_prediction_n4 = np.partition(coupling_n4.eigvals, 1)[:2].mean()
 
@@ -71,34 +81,39 @@ class AnticrossingFit:
         avg_freq = (frequency_prediction_00 + frequency_prediction_n4) / 2
         avg_k = (2 * pi / c) * avg_freq
 
-        coupling_strength = coupling_param * geometry.fsr \
-            * (8 * pi * avg_k * geometry.mirror_curv_rad)**self.ansatz_power
+        coupling_strength = (
+            coupling_param
+            * geometry.fsr
+            * (8 * pi * avg_k * geometry.mirror_curv_rad) ** self.ansatz_power
+        )
 
         return np.array([avg_freq, frequency_halfdiff, coupling_strength])
 
     def mixed_mode_coupling_numbers(
-            self,
-            q_branch,
-            geometry: Optional[SymmetricCavityGeometry] = None,
-            coupling_param: Optional[float] = None):
-        '''
-        '''
+        self,
+        q_branch,
+        geometry: Optional[SymmetricCavityGeometry] = None,
+        coupling_param: Optional[float] = None,
+    ):
         def reduced_scalar_func(q_branch_single):
             return self._mixed_mode_coupling_numbers_single(
-                q_branch_single, geometry, coupling_param)
+                q_branch_single, geometry, coupling_param
+            )
 
         coupling_numbers = np.apply_along_axis(reduced_scalar_func, -1, q_branch)
         return np.moveaxis(coupling_numbers, -1, 0)  # move last axis first
 
     def mixed_mode_frequency(
-            self,
-            q_branch,
-            geometry: Optional[SymmetricCavityGeometry] = None,
-            coupling_param: Optional[float] = None,
+        self,
+        q_branch,
+        geometry: Optional[SymmetricCavityGeometry] = None,
+        coupling_param: Optional[float] = None,
     ):
         branch = q_branch[..., 1]
         avg_freq, frequency_halfdiff, coupling_strength = self.mixed_mode_coupling_numbers(
-            q_branch, geometry, coupling_param,
+            q_branch,
+            geometry,
+            coupling_param,
         )
         # coupling angle:
         # return np.arctan2(frequency_halfdiff, coupling_strength)
@@ -144,14 +159,19 @@ class AnticrossingFit:
         return SymmetricCavityGeometry(*unumpy.nominal_values(self.upopt)[:4])
 
     def mixing_fraction(self, qbranch):
-        '''
+        """
         Fraction of state in the upper branch low-frequency state.
 
-        '''
+        qbranch: array_like, shape 2
+            Sequence of ordered pairs (q, branch) specifying the state
+            in the anticrossing feature.
+        """
         qbranch = np.asarray(qbranch)
 
         _, frequency_halfdiff, coupling_strength = self.mixed_mode_coupling_numbers(
-            qbranch, self.geometry, self.upopt[4].n,
+            qbranch,
+            self.geometry,
+            self.upopt[4].n,
         )
 
         # frequency_halfdiff is:
