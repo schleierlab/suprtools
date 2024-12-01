@@ -1,13 +1,12 @@
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, assert_never
 
 import numpy as np
 import scipy.constants
 import scipy.integrate
 from numpy.typing import ArrayLike
-from scipy.constants import c, hbar
+from scipy.constants import c, elementary_charge, hbar, mu_0, pi
 from scipy.constants import k as k_B
-from scipy.constants import mu_0, pi
 
 phi_0 = scipy.constants.physical_constants['mag. flux quantum'][0]
 
@@ -19,6 +18,7 @@ class TypeIISuperconductor:
     gap_temperature: float
     room_temperature_resistivity: float
     residual_resistivity_ratio: float
+    carrier_density: float
 
     @property
     def rrr(self):
@@ -84,7 +84,26 @@ class TypeIISuperconductor:
 
         return 2/eta * integral
 
+    @property
+    def effective_penetration_depth(self):
+        # see Gurevich (2017)
+        purity_a = pi * self.coherence_length / (2 * np.asarray(self.mean_free_path))
+        numerator = np.where(
+            purity_a < 1,
+            np.arccos(purity_a),
+            np.arccosh(purity_a),
+        )
+        denominator = np.sqrt(np.abs(purity_a**2 - 1))
+        return self.penetration_depth * np.sqrt(purity_a / (pi/2 - numerator / denominator))
+
     BCSMethod = Literal['numeric', '1216', 'sinhlin', 'eq18']
+
+    @property
+    def mean_free_path(self):
+        return (
+            hbar * (3 * pi**2 * self.carrier_density)**(1/3)
+            / (self.carrier_density * elementary_charge**2 * self.cryo_normalstate_resistivity)
+        )
 
     def bcs_surface_resistance(
             self,
@@ -115,11 +134,6 @@ class TypeIISuperconductor:
                 - 'eq18'
                     Gurevich eq. 18. Requires hbar omega / 2 k_B T << 1
 
-        rrr : scalar, optional
-            Residual resistivity ratio R(300 K)/R(4 K), for computing normal state
-            conductivity.
-            Default: 300
-
         Returns
         -------
         scalar
@@ -133,12 +147,13 @@ class TypeIISuperconductor:
         eta = hbar * omega / (k_B * self.gap_temperature)
         beta_dimless = self.gap_temperature / temp
 
+        lambda_impure = self.effective_penetration_depth
         if method == 'numeric':
-            prefactor = 1/2 * mu_0**2 * self.penetration_depth**3 / self.cryo_rho_n
+            prefactor = 1/2 * mu_0**2 * lambda_impure**3 / self.cryo_rho_n
             return prefactor * omega**2 * self.bcs_conductivity_ratio(eta, beta_dimless)
         elif method in ['1216', 'sinhlin']:
             half_beta_hbar_omega = 1/2 * hbar * omega / (k_B * temp)
-            prefactor = 2 * mu_0**2 * self.penetration_depth**3 \
+            prefactor = 2 * mu_0**2 * lambda_impure**3 \
                 * k_B * self.gap_temperature / self.cryo_rho_n
 
             if method == '1216':
@@ -151,7 +166,7 @@ class TypeIISuperconductor:
             return prefactor * omega / hbar * sinhterm \
                 * scipy.special.k0(half_beta_hbar_omega) * np.exp(-self.gap_temperature / temp)
         elif method == 'eq18':
-            prefactor = mu_0**2 * self.penetration_depth**3 * self.gap_temperature / self.cryo_rho_n
+            prefactor = mu_0**2 * lambda_impure**3 * self.gap_temperature / self.cryo_rho_n
             c1 = 4 / np.exp(np.euler_gamma)
             return prefactor * omega**2 / temp \
                 * np.log(c1 * k_B * temp / (hbar * omega)) \
@@ -166,18 +181,18 @@ class TypeIISuperconductor:
         b_critical_2 = phi_0 / (2 * pi * self.coherence_length**2)
         eta = phi_0 * b_critical_2 / self.cryo_rho_n
 
-        return phi_0 / (2 * eta * self.penetration_depth)
+        return phi_0 / (2 * eta * self.effective_penetration_depth)
 
     def trapped_vortex_resistance_per_field(
             self,
             freq,
             segment_length,
+            method: Literal['exact', 'eq32', 'eq33'] = 'exact',
     ):
         '''
         Compute the surface resistance per unit magnetic field due to
-        trapped vortices, according to Gurevich (2017) eq. 30
-        (Gurevich (2013) eqs. 14, 16), which assumes vortex segments with
-        uniform lengths > penetration depth.
+        trapped vortices, assuming vortex segments with uniform lengths
+        greater than the penetration depth.
 
         Parameters
         ----------
@@ -185,36 +200,103 @@ class TypeIISuperconductor:
             RF frequency, in Hz
         segment_length : scalar
             Length of vortex segment from surface to pinning center, in m.
+        method: {'exact'}
+            'exact':
+                compute according to Gurevich (2017) eq. 30
+                (Gurevich (2013) eqs. 14, 16)
+            'eq32'
+                Use Gurevich (2017) eq. 32, which assumes the frequency
+                is below the upper characteristic frequency \omega_\lambda
+            'eq33'
+                Use Gurevich (2017) eq. 33 (Gurevich (2013) eq 19),
+                which assumes the frequency is between the upper
+                characteristic frequency \omega_\lambda and the lower
+                characteristic frequency \omega_\ell
+            'modified_lowfreq'
+                A low-frequency approximation that doesn't assume
+                segment_length << london_lambda
 
         Returns
         -------
         scalar
             Surface resistance contribution from trapped vortices per unit of
-            magnetic flux density
+            magnetic flux density, in units of ohm/tesla
         '''
 
         omega = 2 * pi * freq
+        lambda_impure = self.effective_penetration_depth
 
-        kappa = self.penetration_depth / self.coherence_length
-        g = np.log(kappa) + 0.5
-
-        line_tension_epsilon = phi_0**2 * g / (4 * pi * mu_0 * self.penetration_depth**2)
+        line_tension_epsilon = phi_0**2 * self.g / (4 * pi * mu_0 * lambda_impure**2)
 
         b_critical_2 = phi_0 / (2 * pi * self.coherence_length**2)
         eta = phi_0 * b_critical_2 / self.cryo_rho_n
 
-        chi = omega * eta * self.penetration_depth**2 / line_tension_epsilon
+        chi = omega * eta * lambda_impure**2 / line_tension_epsilon
         nu = omega * eta * segment_length**2 / line_tension_epsilon
+        root_2_nu = np.sqrt(2 * nu)
+        alpha = lambda_impure / segment_length
 
         high_freq_lim_value = self.trapped_vortex_resistance_per_field_highfreqlim
-        numerical_factor = chi**2 * (
-            (5 + chi**2) / (1 + chi**2)**2
-            - 2 / (chi**1.5) * np.imag(
-                np.tanh(np.sqrt(nu * 1j)) / (np.sqrt(1j) * (1 - chi * 1j)**2)
+
+        if method == 'exact':
+            numerical_factor = chi**2 * (
+                (5 + chi**2) / (1 + chi**2)**2
+                - 2 / (chi**1.5) * np.imag(
+                    np.tanh(np.sqrt(nu * 1j)) / (np.sqrt(1j) * (1 - chi * 1j)**2)
+                )
             )
-        )
+        elif method == 'eq32':
+            numerator = alpha * root_2_nu * (np.sinh(root_2_nu) - np.sin(root_2_nu))
+            denominator = (np.cosh(root_2_nu) + np.cos(root_2_nu))
+            numerical_factor = numerator / denominator
+        elif method == 'eq33':
+            b_critical = phi_0 / (2**1.5 * pi * lambda_impure * self.coherence_length)
+            return np.sqrt(mu_0 * self.cryo_normalstate_resistivity * omega / (2 * self.g)) / b_critical
+        elif method == 'modified_lowfreq':
+            numerical_factor = 2 * nu**2 * alpha**4 * (
+                5/2
+                + ((np.sinh(root_2_nu) - np.sin(root_2_nu)) - 2*nu * alpha**2 * (np.sinh(root_2_nu) + np.sin(root_2_nu)))
+                    / (np.sqrt(2) * alpha**3 * nu**1.5 * (np.cosh(root_2_nu) + np.cos(root_2_nu)))
+            )
+
+            return phi_0 / (2 * eta * segment_length * alpha) * numerical_factor
+        else:
+            assert_never(method)
+
 
         return high_freq_lim_value * numerical_factor
+
+    @property
+    def kappa(self):
+        return self.effective_penetration_depth / self.coherence_length
+
+    @property
+    def g(self):
+        return np.log(self.kappa) + 0.5
+
+    def trapped_vortex_char_freq_lambda(self):
+        '''
+        Characteristic frequency \omega_\lambda / 2\pi (Gurevich eq. 29)
+        '''
+        return (
+            self.g * self.cryo_normalstate_resistivity * self.coherence_length**2
+            / (2 * mu_0 * self.effective_penetration_depth**4)
+            / (2 * pi)
+        )
+
+    def trapped_vortex_char_freq_ell(
+            self,
+            segment_length,
+    ):
+        '''
+        Characteristic frequency \omega_\ell / 2\pi (Gurevich eq. 29)
+        '''
+        return (
+            self.g * self.cryo_normalstate_resistivity * self.coherence_length**2
+            / (2 * mu_0 * self.effective_penetration_depth**2 * segment_length**2)
+            / (2 * pi)
+        )
+
 
 
 class Niobium(TypeIISuperconductor):
@@ -222,6 +304,7 @@ class Niobium(TypeIISuperconductor):
     coherence_length: float = 40e-9
     # gap_temperature: float = 17.67
     room_temperature_resistivity: float = 147e-9
+    carrier_density = 5.56e+22 * 1e+6  # convert cm(-3) to m(-3)
 
     def __init__(self, residual_resistivity_ratio, gap_temperature=17.67):
         self.residual_resistivity_ratio = residual_resistivity_ratio
