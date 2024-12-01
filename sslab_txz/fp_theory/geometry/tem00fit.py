@@ -31,11 +31,12 @@ class TEM00Fit:
     result: ModelResult
 
     def __init__(self, qs: ArrayLike, pols: ArrayLike, freqs: ArrayLike):
-        self.qs = qs
-        self.pols = pols
-        self.freqs = np.asarray(freqs)
+        self.qs = np.asarray(qs)
+        self.pols = np.asarray(pols)
+        self.freqs_u = freqs
+        self.freqs = unp.nominal_values(self.freqs_u)
 
-        freqs_std = unp.std_devs(self.freqs)
+        freqs_std = unp.std_devs(self.freqs_u)
         self.freqs_std = None if np.any(freqs_std == 0) else freqs_std
 
     def _fitted(self):
@@ -67,7 +68,7 @@ class TEM00Fit:
         popt, pcov = scipy.optimize.curve_fit(
             self._tem00_fitfunc_nextorder,
             [self.qs, self.pols],
-            list(unp.nominal_values(self.freqs)),
+            list(self.freqs),
             sigma=self.freqs_std,
             p0=p0,
             bounds=(
@@ -105,7 +106,7 @@ class TEM00Fit:
             alpha2=asdict(alpha2),
         )
         self.result = model.fit(
-            unp.nominal_values(self.freqs),
+            self.freqs,
             params, q=self.qs, pol=self.pols,
             weights=(None if self.freqs_std is None else 1/self.freqs_std),
             nan_policy='omit',
@@ -140,23 +141,23 @@ class TEM00Fit:
     def _fit_info_box(self, loc, method: Literal['curve_fit', 'lmfit'] = 'curve_fit'):
         geo = self.geometry(method)
         if method == 'curve_fit':
-            alpha2 = self.upopt[4]
+            alpha2_u = self.upopt[4]
         elif method == 'lmfit':
-            alpha2 = self.result.uvars['alpha2']
+            alpha2_u = self.result.uvars['alpha2']
         else:
             assert_never(method)
 
         fitstr = '\n'.join([
-            f'$L = {geo.length*1e3:S}$ mm',
-            f'  FSR: ${geo.fsr/1e+9:LS}$ GHz',
-            f'$\\overline{{R}} = {geo.mirror_curv_rad*1e+3:S}$ mm',
-            f'  $\\overline{{g}} = {geo.g:S}$',
-            f'$\\eta\\,\\cos\\phi = {geo.eta_astig:S}$',
+            f'$L = {geo.length_u*1e3:S}$ mm',
+            f'  FSR: ${geo.fsr_u/1e+9:LS}$ GHz',
+            f'$\\overline{{R}} = {geo.mirror_curv_rad_u*1e+3:S}$ mm',
+            f'  $\\overline{{g}} = {geo.g_u:S}$',
+            f'$\\eta\\,\\cos\\phi = {geo.eta_astig_u:S}$',
             '  if $\\phi = 0$:',
-            f'  $R_x = {geo.rx*1e+3:S}$ mm',
-            f'  $R_y = {geo.ry*1e3:S}$ mm',
-            f'$\\tilde{{p}} = {geo.asphere_p:S}$',
-            f'$\\alpha_2 = {alpha2:SL}$',
+            f'  $R_x = {geo.rx_u*1e+3:S}$ mm',
+            f'  $R_y = {geo.ry_u*1e3:S}$ mm',
+            f'$\\tilde{{p}} = {geo.asphere_p_u:S}$',
+            f'$\\alpha_2 = {alpha2_u:SL}$',
         ])
 
         at = AnchoredText(
@@ -190,7 +191,7 @@ class TEM00Fit:
         ax_freq, ax_resid = axs
 
         plot_q_range = np.arange(min(self.qs), max(self.qs) + 1)
-        fit_fsr = self.geometry(method).fsr.n
+        fit_fsr = self.geometry(method).fsr
 
         polstrs = {+1: '$x$', -1: '$y$'}
         markers = {+1: '.', -1: 'x'}
@@ -198,7 +199,7 @@ class TEM00Fit:
 
             polmask = (self.pols == pol)
             plot_qs = self.qs[polmask]
-            plot_freqs = unp.nominal_values(self.freqs[polmask])
+            plot_freqs = self.freqs[polmask]
 
             # actual data
             line, _, _ = ax_freq.errorbar(

@@ -11,10 +11,10 @@ from fractions import Fraction
 from typing import Literal, Optional, assert_never
 
 import numpy as np
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
 from scipy.constants import c, epsilon_0, pi
 from scipy.constants import h as planck_h
-from uncertainties import UFloat
+from uncertainties import UFloat, ufloat
 from uncertainties import unumpy as unp
 
 import sslab_txz.fp_theory.operators as ops
@@ -26,52 +26,121 @@ from sslab_txz.fp_theory.modes import ScalarModeBasis
 from sslab_txz.fp_theory.operators import ScalarModeOperator, VectorModeOperator
 
 
-@dataclass
 class SymmetricCavityGeometry(CavityGeometry):
-    length: MaybeUFloat
-    mirror_curv_rad: MaybeUFloat
-    eta_astig: MaybeUFloat = 0
-    asphere_p: MaybeUFloat = 0  # \tilde{p}, as defined in van Exter et al. (2022), eq. 28.
+    _length_u: UFloat
+    _mirror_curv_rad_u: MaybeUFloat
+    _eta_astig_u: MaybeUFloat = ufloat(0, 0)
+    _asphere_p_u: MaybeUFloat = 0  # \tilde{p}, as defined in van Exter et al. (2022), eq. 28.
 
-    def to_nominal(self) -> SymmetricCavityGeometry:
-        return SymmetricCavityGeometry(
-            length=unp.nominal_values(self.length),
-            mirror_curv_rad=unp.nominal_values(self.mirror_curv_rad),
-            eta_astig=unp.nominal_values(self.eta_astig),
-            asphere_p=unp.nominal_values(self.asphere_p),
-        )
+    def __init__(self, length: MaybeUFloat, mirror_curv_rad: MaybeUFloat, eta_astig: MaybeUFloat = 0, asphere_p: MaybeUFloat = 0):
+        self._length_u = self._to_ufloat(length)
+        self._mirror_curv_rad_u = self._to_ufloat(mirror_curv_rad)
+        self._eta_astig_u = self._to_ufloat(eta_astig)
+        self._asphere_p_u = self._to_ufloat(asphere_p)
+
+    @staticmethod
+    def _to_ufloat(x: MaybeUFloat) -> UFloat:
+        if isinstance(x, int | float):
+            return ufloat(x, 0)
+        elif isinstance(x, UFloat):
+            return x
+        assert_never(x)
+
+    @property
+    def length(self):
+        return self._length_u.n
+
+    @property
+    def length_u(self):
+        return self._length_u
+
+    @property
+    def mirror_curv_rad(self):
+        return self._mirror_curv_rad_u.n
+
+    @property
+    def mirror_curv_rad_u(self):
+        return self._mirror_curv_rad_u
+
+    @property
+    def eta_astig(self):
+        return self.eta_astig_u.n
+
+    @property
+    def eta_astig_u(self):
+        return self._eta_astig_u
+
+    @property
+    def asphere_p(self):
+        return self.asphere_p_u.n
+
+    @property
+    def asphere_p_u(self):
+        return self._asphere_p_u
+
+    # def to_nominal(self) -> SymmetricCavityGeometry:
+    #     return SymmetricCavityGeometry(
+    #         length=unp.nominal_values(self.length),
+    #         mirror_curv_rad=unp.nominal_values(self.mirror_curv_rad),
+    #         eta_astig=unp.nominal_values(self.eta_astig),
+    #         asphere_p=unp.nominal_values(self.asphere_p),
+    #     )
+
+    @property
+    def g_u(self) -> UFloat:
+        return 1 - self.length_u / self.mirror_curv_rad_u
 
     @property
     def g(self) -> float:
-        return 1 - self.length / self.mirror_curv_rad
+        return self.g_u.n
 
     @property
     def z0(self) -> float:
-        return unp.nominal_values(self.z0_u)
+        return self.z0_u.n
 
     @property
-    def z0_u(self) -> float:
-        return unp.sqrt(self.z1 * (self.mirror_curv_rad - self.z1))
+    def z0_u(self) -> UFloat:
+        return unp.sqrt(self.z1_u * (self.mirror_curv_rad_u - self.z1_u)).item()
 
     @property
     def z1(self) -> float:
-        return self.length / 2
+        return self.z1_u.n
+
+    @property
+    def z1_u(self) -> UFloat:
+        return self.length_u / 2
 
     @property
     def rx(self) -> float:
-        return self.mirror_curv_rad / (1 + self.eta_astig)
+        return self.rx_u.n
+
+    @property
+    def rx_u(self) -> UFloat:
+        return self.mirror_curv_rad_u / (1 + self.eta_astig_u)
 
     @property
     def ry(self) -> float:
-        return self.mirror_curv_rad / (1 - self.eta_astig)
+        return self.ry_u.n
+
+    @property
+    def ry_u(self) -> UFloat:
+        return self.mirror_curv_rad_u / (1 - self.eta_astig_u)
 
     @property
     def g_x(self) -> float:
-        return 1 - self.length / self.rx
+        return self.g_x_u.n
 
     @property
     def g_y(self) -> float:
-        return 1 - self.length / self.ry
+        return self.g_y_u.n
+
+    @property
+    def g_x_u(self) -> UFloat:
+        return 1 - self.length_u / self.rx_u
+
+    @property
+    def g_y_u(self) -> UFloat:
+        return 1 - self.length_u / self.ry_u
 
     @property
     def alpha(self) -> float:
@@ -158,8 +227,8 @@ class SymmetricCavityGeometry(CavityGeometry):
         '''
         return self._mode_volume_fromfreq(self.paraxial_frequency(longi_ind, 0))
 
-    def _mode_volume_fromfreq(self, freq: ArrayLike):
-        wavelength = c / freq
+    def _mode_volume_fromfreq(self, freq: ArrayLike) -> NDArray:
+        wavelength = c / np.asarray(freq)
         return self.z0 * self.length * wavelength / 4
 
     def waist_vacuum_field(self, longi_ind: ArrayLike) -> ArrayLike:
@@ -396,4 +465,4 @@ class FiniteMirrorSymmetricCavity:
 
     @property
     def lateral_numerical_aperture(self):
-        return np.sin(np.arctan(self.edge_z / self.mirror_radius))
+        return unp.sin(unp.arctan(self.edge_z / self.mirror_radius))
