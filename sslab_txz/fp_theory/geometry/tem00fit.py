@@ -1,5 +1,6 @@
 import itertools
-from typing import ClassVar, Literal, Optional, TypeAlias, assert_never, cast
+from collections.abc import Sequence
+from typing import Any, ClassVar, Literal, Optional, TypeAlias, assert_never, cast
 
 import numpy as np
 import scipy.optimize
@@ -9,11 +10,15 @@ from lmfit.model import ModelResult
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.offsetbox import AnchoredText
+from numpy.lib import recfunctions
 from numpy.typing import ArrayLike
 from scipy.constants import c, pi
+from tqdm import tqdm
 from uncertainties import unumpy as unp
 
+from sslab_txz.fp_theory.coupling_config import CouplingConfig
 from sslab_txz.fp_theory.geometry import SymmetricCavityGeometry
+from sslab_txz.fp_theory.modes import ScalarModeBasis
 from sslab_txz.plotting import sslab_style
 
 InitParam: TypeAlias = float | dict | Literal[False]
@@ -283,3 +288,76 @@ class TEM00Fit:
         )
 
         return '\n'.join(itertools.chain(header, lines))
+
+    def _tem_fitfunc_single(self, q, n, ind, length, mean_curv_rad, eta_astig, asphere_p):
+        geo = SymmetricCavityGeometry(length, mean_curv_rad, eta_astig, asphere_p)
+        coupling = geo.coupling_matrix(
+            int(q),
+            ScalarModeBasis.make_single_order_basis(int(n)),
+            CouplingConfig.no_xcoupling,
+            self.geometry().resonance_frac(),
+        )
+        return coupling.eigvals[int(ind)]
+
+    def _tem_fitfunc_factory(self, progress_bar: Optional[tqdm] = None):
+        def _tem_fitfunc(qnind, length, mean_curv_rad, eta_astig, asphere_p):
+            if progress_bar is not None:
+                progress_bar.update(1)
+                progress_bar.set_description(
+                    f'trying L, R = {length*1e+3:.3f}, {mean_curv_rad*1e+3:.3f} mm; '
+                    f'eta, p = {eta_astig:.3f}, {asphere_p:.3f}',
+                )
+            def reduced_scalar_func(qnind: tuple[Any, Any, Any]):
+                return self._tem_fitfunc_single(*qnind, length, mean_curv_rad, eta_astig, asphere_p)
+            return np.apply_along_axis(reduced_scalar_func, -1, qnind)
+
+        return _tem_fitfunc
+
+    def refine_fit(self, hom_records: Sequence[tuple[int, int, str]]) -> SymmetricCavityGeometry:
+        '''
+        hom_records: sequence of tuples
+            A sequence of tuples, each of which represents an additional
+            data point. The tuple consists of three numbers:
+                n: int
+                    the transverse mode order
+                ind: int
+                    the (zero-)index of the mode when all modes of order
+                    n are sorted in ascending order
+                freq: str
+                    the frequency of the mode, as a string in GHz.
+                    may include uncertainties (which are current discarded)
+        '''
+
+        def record_processor(n, ind, ufloat_str):
+            ufreq = 1e+9 * uncertainties.ufloat_fromstr(ufloat_str)
+
+            q_base = int(ufreq.n // self.geometry().fsr)
+            return q_base, n, ind, ufreq.n
+
+        tem00_records = [
+            (q, 0, 0 if pol == +1 else 1, freq)
+            for q, pol, freq in zip(self.qs, self.pols, self.freqs)
+        ]
+        tem_fit_records = tem00_records + [record_processor(*record) for record in hom_records]
+        tem_fit_recarray = np.rec.fromrecords(
+            tem_fit_records,
+            dtype=[('q', 'i4'), ('n', 'i4'), ('ind', 'i4'), ('freq', 'f8')],
+        )
+
+        tem00fit_geom = self.geometry()
+        with tqdm() as pbar:
+            tem_model = Model(self._tem_fitfunc_factory(pbar), independent_vars=['qnind'])
+            tem_fit_result = tem_model.fit(
+                tem_fit_recarray['freq'],
+                qnind=recfunctions.structured_to_unstructured(tem_fit_recarray[['q', 'n', 'ind']]),
+                length=tem00fit_geom.length,
+                mean_curv_rad=tem00fit_geom.mirror_curv_rad,
+                eta_astig=tem00fit_geom.eta_astig,
+                asphere_p=tem00fit_geom.asphere_p,
+            )
+        return SymmetricCavityGeometry(
+            tem_fit_result.uvars['length'].n,
+            tem_fit_result.uvars['mean_curv_rad'].n,
+            tem_fit_result.uvars['eta_astig'].n,
+            tem_fit_result.uvars['asphere_p'].n,
+        )
