@@ -1,6 +1,6 @@
 import re
 from collections.abc import Sequence
-from typing import assert_never, cast
+from typing import Any, assert_never, cast
 
 import matplotlib
 import numpy as np
@@ -80,13 +80,20 @@ def latex_frexp10(x):
     return fr'{significand} \times 10^{{{exp}}}'
 
 
+# TODO use AnchoredText instead of ax.text?
 def label_subplots(
         fig: Figure,
         artists: Sequence[Axes] | Sequence[SubFigure],
         label_fmt='(alph)',
         adjust=(5, -5),
         colors=None,
+        text_kws: dict[int, dict[str, Any]] = {},
 ):
+    '''
+    text_kws:
+        Dictionary mapping subplot index to a dict of kwargs to pass to
+        Axes.text() or SubFigre.text().
+    '''
     if colors is None:
         colors = ['black'] * len(artists)
 
@@ -130,15 +137,17 @@ def label_subplots(
             case _:
                 assert_never()
 
-        text(
-            0.0, 1.0,
-            label,
+        text_kws_default = dict(
             transform=(transform + trans),
             fontsize='large',
             verticalalignment='top',
             color=colors[i],
+        )
+        text(
+            0.0, 1.0,
+            label,
+            **(text_kws_default | text_kws.get(i, dict())),
             # fontfamily='serif',
-            # bbox=dict(facecolor='0.7', edgecolor='none', pad=3.0),
         )
 
 
