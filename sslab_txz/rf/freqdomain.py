@@ -1,7 +1,7 @@
 import copy
 import datetime
 import functools
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Callable, Literal, Optional, Self
 
@@ -13,6 +13,7 @@ import scipy.optimize
 import scipy.signal
 import skrf as rf
 import uncertainties
+from matplotlib.figure import Figure
 from matplotlib.ticker import MultipleLocator
 from numpy.typing import NDArray
 from scipy.constants import pi
@@ -26,7 +27,7 @@ from sslab_txz.plotting import sslab_style
 from sslab_txz.rf.errors import FitFailureError
 
 
-class ScanDataFilter():
+class ScanDataFilter:
     def __init__(self, *, fs,  fc_hp=None, fc_lp=None, high_pass_order=0, low_pass_order=0):
         '''
         Parameters
@@ -242,16 +243,24 @@ class WideScanNetwork(rf.Network):
             center_freq_ghz,
             span_ghz,
             fsr_guess_ghz: float,
-            offset_range,
+            offsets: Sequence[int],
             scale=1,
             geo: Optional[SymmetricCavityGeometry] = None,
             filt: Optional[ScanDataFilter] = None,
-            fig=None,
-            axs=None,
+            max_plot_mode_order: int = 8,
+            mode_colorfunc=(lambda n: f'C{n//2+1}'),
+            downsample: int = 1,
+            sexy: bool = True,
+            fig: Optional[Figure] = None,
+            axs: Optional[NDArray] = None,
             **kwargs):
-        min_offset, max_offset = offset_range
-        nrows_base = max_offset - min_offset + 1
+        if not isinstance(downsample, int):
+            raise TypeError
+        elif downsample <= 0:
+            raise ValueError
+        downsampling_slice = slice(None, None, downsample)
 
+        nrows_base = len(offsets)
         if filt is not None:
             row_factor = 2
             hratios = [2, 1] * nrows_base
@@ -270,8 +279,9 @@ class WideScanNetwork(rf.Network):
                 constrained_layout=True,
             )
             fig.supxlabel('Frequency [GHz]')
-            for ax in axs:
-                sslab_style(ax)
+            if sexy:
+                for ax in axs:
+                    sslab_style(ax)
         elif (fig is not None) and (axs is not None):
             pass
         else:
@@ -281,15 +291,13 @@ class WideScanNetwork(rf.Network):
         if filt is not None:
             unfiltered_axs = axs[0::2]
 
-        offset_iter = range(min_offset, max_offset + 1)
-
-        for ax, offset in zip(unfiltered_axs, offset_iter):
+        for ax, offset in zip(unfiltered_axs, offsets):
             offset_center_freq_ghz = center_freq_ghz + offset * fsr_guess_ghz
 
             subnet = self._subnetwork(offset_center_freq_ghz, span_ghz)
             ax.plot(
-                subnet.f / 1e9 - fsr_guess_ghz * offset,
-                rf.complex_2_db(subnet.s.flatten() * scale),
+                subnet.f[downsampling_slice] / 1e9 - fsr_guess_ghz * offset,
+                rf.complex_2_db(subnet.s.flatten()[downsampling_slice] * scale),
                 label=fr'${offset:+d}\times {fsr_guess_ghz}$ GHz',
                 rasterized=True,
                 **kwargs,
@@ -297,7 +305,7 @@ class WideScanNetwork(rf.Network):
 
         if filt is not None:
             filtered_axs = axs[1::2]
-            for ax, offset in zip(filtered_axs, offset_iter):
+            for ax, offset in zip(filtered_axs, offsets):
                 offset_center_freq_ghz = center_freq_ghz + offset * fsr_guess_ghz
                 subnet = self._subnetwork(offset_center_freq_ghz, span_ghz)
 
@@ -310,8 +318,8 @@ class WideScanNetwork(rf.Network):
                 #     distance=int(2e6//self.freq_step),
                 # )
                 ax.plot(
-                    subnet.f / 1e9 - fsr_guess_ghz * offset,
-                    filtered_magnitude,
+                    subnet.f[downsampling_slice] / 1e9 - fsr_guess_ghz * offset,
+                    filtered_magnitude[downsampling_slice],
                     label=fr'${offset:+d}\times {fsr_guess_ghz}$ GHz',
                     rasterized=True,
                     **kwargs,
@@ -324,7 +332,7 @@ class WideScanNetwork(rf.Network):
                 #     linestyle='None',
                 # )
 
-            for ax_db, ax_filt, offset in zip(unfiltered_axs, filtered_axs, offset_iter):
+            for ax_db, ax_filt, offset in zip(unfiltered_axs, filtered_axs, offsets):
                 ax_db.set_ylabel(f'$|S_{{21}}|$ (dB)\n[+${offset}\\times$ FSR]')
                 ax_filt.set_ylabel("filtered\n(linear)")
 
@@ -340,16 +348,15 @@ class WideScanNetwork(rf.Network):
                 % res_denom
             q_base_nooffset = int((group_number - res_num * generalized_parity) / res_denom)
 
-            for ax_group, offset_ind in zip(axs.reshape(len(offset_iter), -1), offset_iter):
+            for ax_group, offset_ind in zip(axs.reshape(len(offsets), -1), offsets):
                 q_base = q_base_nooffset + offset_ind
 
                 inds = slice(None, None, 2)
                 freq_offset = offset_ind * fsr_guess_ghz * 1e+9
 
                 # plot modes of orders `generalized_parity` mod `res_denom` up to order 8
-                order_limit = 8
-                order_limit_remainder = order_limit % res_denom
-                max_order = order_limit - order_limit_remainder + generalized_parity \
+                order_limit_remainder = max_plot_mode_order % res_denom
+                max_order = max_plot_mode_order - order_limit_remainder + generalized_parity \
                     - (res_denom if generalized_parity > order_limit_remainder else 0)
 
                 diag_result = geo.near_confocal_coupling_matrix(
@@ -365,7 +372,7 @@ class WideScanNetwork(rf.Network):
                         scaling=1e9,
                         ax=ax,
                         label=(0.5 if i == len(ax_group) - 1 else False),  # label the last Axes
-                        # color=mode_colorfunc,
+                        color=mode_colorfunc,
                         # **annotate_kwargs,
                     )
                 inset_kw_default = dict(
@@ -388,6 +395,7 @@ class WideScanNetwork(rf.Network):
         if filt is None:
             fig.supylabel('$S_{21}$ [dB]')
 
+        fig.align_labels()
         return fig, axs
 
     def fit_network(self, n_poles_cmplx: Optional[int] = None):
