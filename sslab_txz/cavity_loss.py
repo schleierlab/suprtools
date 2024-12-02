@@ -9,6 +9,7 @@ from scipy.constants import c, elementary_charge, hbar, mu_0, pi
 from scipy.constants import k as k_B
 
 phi_0 = scipy.constants.physical_constants['mag. flux quantum'][0]
+geom_factor_f = (pi / 4) * scipy.constants.value('characteristic impedance of vacuum')
 
 
 @dataclass
@@ -328,11 +329,10 @@ def cavity_finesse(
         bcs_fudge_factor: float = 1,
         method: TypeIISuperconductor.BCSMethod = 'numeric',
 ) -> float:
-    geom_factor_ohm_f = (pi / 4) * scipy.constants.value('characteristic impedance of vacuum')
     surface_res = superconductor.bcs_surface_resistance(
         np.asarray(freq),
         np.asarray(temp),
         method,
     )
-    limiting_surface_res = geom_factor_ohm_f / limiting_finesse
-    return geom_factor_ohm_f / (surface_res * bcs_fudge_factor + limiting_surface_res)
+    limiting_surface_res = geom_factor_f / limiting_finesse
+    return geom_factor_f / (surface_res * bcs_fudge_factor + limiting_surface_res)
