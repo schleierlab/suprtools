@@ -395,7 +395,7 @@ class WideScanNetwork(rf.Network):
         if filt is None:
             fig.supylabel('$S_{21}$ [dB]')
 
-        fig.align_labels()
+        fig.align_labels(axs=axs)
         return fig, axs
 
     def fit_network(self, n_poles_cmplx: Optional[int] = None):
