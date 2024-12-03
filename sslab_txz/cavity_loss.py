@@ -1,3 +1,4 @@
+from abc import ABC
 from dataclasses import dataclass
 from typing import Literal, assert_never
 
@@ -13,7 +14,7 @@ geom_factor_f = (pi / 4) * scipy.constants.value('characteristic impedance of va
 
 
 @dataclass
-class TypeIISuperconductor:
+class TypeIISuperconductor(ABC):
     penetration_depth: float
     coherence_length: float
     gap_temperature: float
@@ -35,6 +36,10 @@ class TypeIISuperconductor:
     @property
     def cryo_rho_n(self):
         return self.cryo_normalstate_resistivity
+
+    @classmethod
+    def fermi_momentum(cls) -> float:
+        return hbar * (3 * pi**2 * cls.carrier_density)**(1/3)
 
     @staticmethod
     def fermi_dirac(beta_times_e: float):
@@ -187,7 +192,7 @@ class TypeIISuperconductor:
     def trapped_vortex_resistance_per_field(
             self,
             freq,
-            segment_length,
+            segment_length: ArrayLike,
             method: Literal['exact', 'eq32', 'eq33'] = 'exact',
     ):
         '''
@@ -199,7 +204,7 @@ class TypeIISuperconductor:
         ----------
         freq : scalar
             RF frequency, in Hz
-        segment_length : scalar
+        segment_length : array_like
             Length of vortex segment from surface to pinning center, in m.
         method: {'exact'}
             'exact':
@@ -223,6 +228,7 @@ class TypeIISuperconductor:
             Surface resistance contribution from trapped vortices per unit of
             magnetic flux density, in units of ohm/tesla
         '''
+        segment_length = np.asarray(segment_length)
 
         omega = 2 * pi * freq
         lambda_impure = self.effective_penetration_depth
@@ -307,9 +313,23 @@ class Niobium(TypeIISuperconductor):
     room_temperature_resistivity: float = 147e-9
     carrier_density = 5.56e+22 * 1e+6  # convert cm(-3) to m(-3)
 
-    def __init__(self, residual_resistivity_ratio, gap_temperature=17.67):
+    def __init__(
+            self,
+            residual_resistivity_ratio,
+            gap_temperature=17.67,
+    ):
         self.residual_resistivity_ratio = residual_resistivity_ratio
         self.gap_temperature = gap_temperature
+
+    @classmethod
+    def from_rrr(cls, rrr):
+        return cls(residual_resistivity_ratio=rrr)
+
+    @classmethod
+    def from_mean_free_path(cls, mean_free_path: float):
+        cryo_resistivity = cls.fermi_momentum() /  (cls.carrier_density * elementary_charge**2 * mean_free_path)
+        rrr = cls.room_temperature_resistivity / cryo_resistivity
+        return cls(residual_resistivity_ratio=rrr)
 
 
 def roughness_limit_finesse(
