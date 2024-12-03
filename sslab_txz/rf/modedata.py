@@ -5,29 +5,22 @@ import itertools
 from collections.abc import Callable, Sequence
 from numbers import Integral
 from types import EllipsisType
-from typing import (Any, ClassVar, Literal, Optional, Protocol, Self,
-                    SupportsIndex, TypedDict, cast)
+from typing import ClassVar, Literal, Optional, Protocol, Self, SupportsIndex, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
 import uncertainties.unumpy as unp
 from matplotlib.axes import Axes
-from matplotlib.typing import ColorType
 from numpy._typing import _ArrayLikeInt_co
 from numpy.typing import ArrayLike, NDArray
 from scipy.constants import pi
 from uncertainties import ufloat
 
-
-class _ErrorbarKwargs(TypedDict, total=False):
-    color: ColorType
-    label: Any  # anything that can be str()'d
-    linewidth: Any
-    alpha: Any
+from sslab_txz.typing import ErrorbarKwargs
 
 
 class ModePlotStyler(Protocol):
-    def __call__(self, mode_data: NDArray, *xvals: np.number) -> _ErrorbarKwargs: ...
+    def __call__(self, mode_data: NDArray, *xvals: np.number) -> ErrorbarKwargs: ...
 
 
 RecIndex1D = _ArrayLikeInt_co | slice
@@ -243,7 +236,7 @@ class ModeParams:
                 self.xs[axes_order[i]][ind]
                 for i, ind in enumerate(multi_ind)
             ]
-            kwargs: _ErrorbarKwargs = dict(label=xcombo)
+            kwargs: ErrorbarKwargs = dict(label=xcombo)
             if kwarg_func is not None:
                 kwargs |= kwarg_func(full_mode_data, *xcombo)
 
@@ -263,7 +256,7 @@ class ModeParams:
             )
             dataline = ebar_container.lines[0]
 
-            fill_kw: _ErrorbarKwargs = dict(
+            fill_kw: ErrorbarKwargs = dict(
                 color=dataline.get_color(),
                 alpha=0.15,
                 linewidth=0,
