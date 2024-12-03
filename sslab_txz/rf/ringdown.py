@@ -841,7 +841,7 @@ class RingdownSetSweep:
         fsr = unp.nominal_values(self.geometry.fsr)
         limit_fwhm = fsr / np.exp(limit_log_fin)
 
-        probe_ufield_scalar_normed = self.geometry.to_nominal().paraxial_scalar_beam_field(
+        probe_ufield_scalar_normed = self.geometry.paraxial_scalar_beam_field(
             probe_r / beam_enlarge_factor,
             probe_z,
             freq,
