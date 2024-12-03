@@ -1,13 +1,20 @@
 from abc import ABC
 from dataclasses import dataclass
-from typing import Literal, assert_never
+from typing import Literal, Optional, assert_never
 
 import numpy as np
 import scipy.constants
 import scipy.integrate
+import uncertainties
+from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
 from numpy.typing import ArrayLike
+from scipy import odr
 from scipy.constants import c, elementary_charge, hbar, mu_0, pi
 from scipy.constants import k as k_B
+from uncertainties import unumpy as unp
+
+from sslab_txz.plotting import expand_range
 
 phi_0 = scipy.constants.physical_constants['mag. flux quantum'][0]
 geom_factor_f = (pi / 4) * scipy.constants.value('characteristic impedance of vacuum')
@@ -356,3 +363,84 @@ def cavity_finesse(
     )
     limiting_surface_res = geom_factor_f / limiting_finesse
     return geom_factor_f / (surface_res * bcs_fudge_factor + limiting_surface_res)
+
+
+class TemperatureFit:
+    mode_frequency: float
+    model: odr.Model
+    data: odr.RealData
+    fit_result: odr.Output
+
+    def __init__(self, mode_data):
+        self.mode_frequency = mode_data['freq'].mean()
+        self.model = odr.Model(self._fitfunc)
+        self.data = odr.RealData(
+            x=unp.nominal_values(mode_data['temp']),
+            y=unp.nominal_values(mode_data['finesse']),
+            sx=unp.std_devs(mode_data['temp']),
+            sy=unp.std_devs(mode_data['finesse']),
+        )
+
+    def _fitfunc(self, params, temp):
+        # limit_finesse, scale_fctr = params
+        limit_finesse, rrr = params
+        return cavity_finesse(
+            self.mode_frequency,
+            temp,
+            limit_finesse,
+            Niobium(
+                residual_resistivity_ratio=rrr,
+                # gap_temperature=gap_temp,
+            ),
+        )
+
+    def fit(self, finesse_0=6e+7, rrr_0=300):
+        self.odr = odr.ODR(self.data, self.model, beta0=[finesse_0, rrr_0])
+        self.fit_result = self.odr.run()
+        self.upopt = uncertainties.correlated_values(self.fit_result.beta, self.fit_result.cov_beta)
+
+    def plot(self, plot_limit_finesse: bool = False, ax: Optional[Axes] = None, **errorbar_kw):
+        if ax is None:
+            _, ax = plt.subplots()
+
+        errorbar_kw_default = dict(
+            linestyle='None',
+            # markersize=1,
+            color='C0',
+        )
+        ax.errorbar(
+            self.data.x,
+            self.data.y,
+            yerr=self.data.sy,
+            xerr=self.data.sx,
+            **(errorbar_kw_default | errorbar_kw),
+        )
+
+        if plot_limit_finesse:
+            fit_limit_finesse = self.upopt[0]
+            ax.axhline(
+                fit_limit_finesse.n,
+                color='red',
+                linestyle='dashed',
+            )
+            ax.annotate(
+                f'${fit_limit_finesse:SL}$',
+                xy=(1, fit_limit_finesse.n),
+                xycoords=ax.get_yaxis_transform(),
+                xytext=(-3, -3),
+                textcoords='offset points',
+                ha='right',
+                va='top',
+            )
+
+        # plot_t_range = 1 / np.linspace(1/4, 1/0.3, 100)
+        # plot_t_range = np.linspace(0.3, 4, 200)
+        plot_t_lims = expand_range(self.data.x)
+        plot_t_range = np.linspace(*plot_t_lims, num=200)
+        ax.plot(
+            plot_t_range,
+            self._fitfunc(self.fit_result.beta, plot_t_range),
+            color='C0',
+        )
+
+        ax.set_xlabel('Temperature [K]')
