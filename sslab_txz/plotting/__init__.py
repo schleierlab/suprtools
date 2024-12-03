@@ -7,6 +7,7 @@ import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure, SubFigure
 from matplotlib.ticker import AutoMinorLocator
+from numpy.typing import ArrayLike
 
 from ._angleannotation import AngleAnnotation as AngleAnnotation
 
@@ -56,14 +57,15 @@ def to_roman(n: int) -> str:
     return ''.join(reversed([_digit_to_roman(d, place) for place, d in enumerate(digits_reversed)]))
 
 
-def expand_range(values, factor=1.1):
+def expand_range(values: ArrayLike, factor: float = 1.1) -> tuple[np.float_, np.float_]:
     '''
     Given a set of real values with extrema val_min, val_max,
     give a pair of numbers lo, hi such that the interval [lo, hi]
     is centered on [val_min, val_max] and is longer by `factor`.
     '''
-    halfspan = (max(values) - min(values)) / 2
-    midpt = (max(values) + min(values)) / 2
+    values = np.asarray(values)
+    halfspan = (values.max() - values.min()) / 2
+    midpt = (values.max() + values.min()) / 2
     return midpt - halfspan * factor, midpt + halfspan * factor
 
 
@@ -218,4 +220,26 @@ def annotate_length(
         textcoords='offset points',
         horizontalalignment=horizontalalignment,
         verticalalignment=verticalalignment,
+    )
+
+
+def annotate_line(ax: Axes, text: str, annotation_x, line_func, offset_pts=(0, 0), **kwargs):
+    test_xs = annotation_x + np.array([0, 0.1])
+    test_ys = line_func(test_xs)
+    plot_xys = np.transpose([test_xs, test_ys])
+
+    # rotation_angle = np.rad2deg(np.arctan2(*(plot_xys[1] - plot_xys[0])[::-1]))
+    rotation_angle = ax.transData.transform_angles(
+        np.rad2deg(np.arctan2(*(plot_xys[1] - plot_xys[0])[::-1])).reshape(-1),
+        plot_xys[0].reshape(-1, 2),
+    )[0]
+    ax.annotate(
+        text,
+        xy=plot_xys[0],
+        xycoords='data',
+        xytext=offset_pts,
+        textcoords='offset points',
+        rotation=rotation_angle,
+        transform_rotates_text=True,
+        **kwargs,
     )
