@@ -1,7 +1,6 @@
-from __future__ import annotations
-
-from abc import ABC, abstractmethod
-from typing import Literal, Optional, assert_never, overload
+from abc import ABC
+from dataclasses import dataclass
+from typing import Literal, Optional, assert_never
 
 import numpy as np
 import scipy.constants
@@ -21,6 +20,7 @@ phi_0 = scipy.constants.physical_constants['mag. flux quantum'][0]
 geom_factor_f = (pi / 4) * scipy.constants.value('characteristic impedance of vacuum')
 
 
+@dataclass
 class TypeIISuperconductor(ABC):
     penetration_depth: float
     coherence_length: float
@@ -28,9 +28,6 @@ class TypeIISuperconductor(ABC):
     room_temperature_resistivity: float
     residual_resistivity_ratio: float
     carrier_density: float
-
-    @abstractmethod
-    def __init__(self, residual_resistivity_ratio): ...
 
     @property
     def rrr(self):
