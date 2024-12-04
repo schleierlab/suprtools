@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 from abc import ABC
-from dataclasses import dataclass
-from typing import Literal, Optional, assert_never
+from typing import Literal, Optional, assert_never, overload
 
 import numpy as np
 import scipy.constants
@@ -10,8 +11,9 @@ from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from numpy.typing import ArrayLike
 from scipy import odr
-from scipy.constants import c, elementary_charge, hbar, mu_0, pi
+from scipy.constants import c, elementary_charge, hbar
 from scipy.constants import k as k_B
+from scipy.constants import mu_0, pi
 from uncertainties import unumpy as unp
 
 from sslab_txz.plotting import expand_range
@@ -20,7 +22,6 @@ phi_0 = scipy.constants.physical_constants['mag. flux quantum'][0]
 geom_factor_f = (pi / 4) * scipy.constants.value('characteristic impedance of vacuum')
 
 
-@dataclass
 class TypeIISuperconductor(ABC):
     penetration_depth: float
     coherence_length: float
@@ -28,6 +29,9 @@ class TypeIISuperconductor(ABC):
     room_temperature_resistivity: float
     residual_resistivity_ratio: float
     carrier_density: float
+
+    def __init__(self, residual_resistivity_ratio: float):
+        self.residual_resistivity_ratio = residual_resistivity_ratio
 
     @property
     def rrr(self):
@@ -370,13 +374,34 @@ def cavity_finesse(
     return geom_factor_f / (surface_res * bcs_fudge_factor + limiting_surface_res)
 
 
-class TemperatureFit:
+class TemperatureFit[T: TypeIISuperconductor]:
     mode_frequency: float
     model: odr.Model
     data: odr.RealData
     fit_result: odr.Output
+    material: type[T]
 
-    def __init__(self, mode_data):
+    @overload
+    def __init__(
+            self: TemperatureFit[Niobium],
+            mode_data,
+            material: type[Niobium] = ...,
+            method: TypeIISuperconductor.BCSMethod = ...,
+    ): ...
+    @overload
+    def __init__(
+        self: TemperatureFit[T],
+        mode_data,
+        material: type[T],
+        method: TypeIISuperconductor.BCSMethod = ...,
+    ): ...
+
+    def __init__(
+            self,
+            mode_data,
+            material=Niobium,
+            method='numeric',
+    ):
         self.mode_frequency = mode_data['freq'].mean()
         self.model = odr.Model(self._fitfunc)
         self.data = odr.RealData(
@@ -385,6 +410,8 @@ class TemperatureFit:
             sx=unp.std_devs(mode_data['temp']),
             sy=unp.std_devs(mode_data['finesse']),
         )
+        self.material = material
+        self.method = method
 
     def _fitfunc(self, params, temp):
         # limit_finesse, scale_fctr = params
@@ -393,10 +420,11 @@ class TemperatureFit:
             self.mode_frequency,
             temp,
             limit_finesse,
-            Niobium(
+            self.material(
                 residual_resistivity_ratio=rrr,
                 # gap_temperature=gap_temp,
             ),
+            method=self.method,
         )
 
     def fit(self, finesse_0=6e+7, rrr_0=300):
@@ -449,3 +477,6 @@ class TemperatureFit:
         )
 
         ax.set_xlabel('Temperature [K]')
+
+    def superconductor(self) -> T:
+        return self.material(residual_resistivity_ratio=self.fit_result.beta[1])
