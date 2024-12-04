@@ -109,7 +109,7 @@ class TypeIISuperconductor(ABC):
         denominator = np.sqrt(np.abs(purity_a**2 - 1))
         return self.penetration_depth * np.sqrt(purity_a / (pi/2 - numerator / denominator))
 
-    BCSMethod = Literal['numeric', '1216', 'sinhlin', 'eq18']
+    BCSMethod = Literal['numeric', '1216', 'sinhlin', 'eq18', 'basic']
 
     @property
     def mean_free_path(self):
@@ -146,6 +146,8 @@ class TypeIISuperconductor(ABC):
                     Deviates at low temperature.
                 - 'eq18'
                     Gurevich eq. 18. Requires hbar omega / 2 k_B T << 1
+                - 'basic'
+                    Gurevich eq. 2 with A = 8.9e+4 nOhm K / GHz^2
 
         Returns
         -------
@@ -155,6 +157,9 @@ class TypeIISuperconductor(ABC):
         '''
         freq = np.asarray(freq)
         temp = np.asarray(temp)
+        if method == 'basic':
+            a = 8.9e-23
+            return a * freq**2 / temp * np.exp(-self.gap_temperature / temp)
 
         omega = 2 * pi * freq
         eta = hbar * omega / (k_B * self.gap_temperature)
