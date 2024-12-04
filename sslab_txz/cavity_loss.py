@@ -365,13 +365,24 @@ def cavity_finesse(
     return geom_factor_f / (surface_res * bcs_fudge_factor + limiting_surface_res)
 
 
-class TemperatureFit:
+class TemperatureFit[T: TypeIISuperconductor]:
     mode_frequency: float
     model: odr.Model
     data: odr.RealData
     fit_result: odr.Output
+    material: type[T]
 
-    def __init__(self, mode_data):
+    method: TypeIISuperconductor.BCSMethod
+    """BCS surface resistance computation method"""
+
+    @overload
+    def __init__(self: TemperatureFit[Niobium], mode_data): ...
+    @overload
+    def __init__(self: TemperatureFit[T], mode_data, material: type[T] = ...): ...
+
+    def __init__(
+        self, mode_data, material=Niobium, method: TypeIISuperconductor.BCSMethod = 'numeric'
+    ):
         self.mode_frequency = mode_data['freq'].mean()
         self.model = odr.Model(self._fitfunc)
         self.data = odr.RealData(
@@ -380,6 +391,8 @@ class TemperatureFit:
             sx=unp.std_devs(mode_data['temp']),
             sy=unp.std_devs(mode_data['finesse']),
         )
+        self.material = material
+        self.method = method
 
     def _fitfunc(self, params, temp):
         # limit_finesse, scale_fctr = params
@@ -388,10 +401,11 @@ class TemperatureFit:
             self.mode_frequency,
             temp,
             limit_finesse,
-            Niobium(
+            self.material(
                 residual_resistivity_ratio=rrr,
                 # gap_temperature=gap_temp,
             ),
+            method=self.method,
         )
 
     def fit(self, finesse_0=6e+7, rrr_0=300):
@@ -444,3 +458,6 @@ class TemperatureFit:
         )
 
         ax.set_xlabel('Temperature [K]')
+
+    def superconductor(self) -> T:
+        return self.material(residual_resistivity_ratio=self.fit_result.beta[1])
