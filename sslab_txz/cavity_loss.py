@@ -317,8 +317,8 @@ class Niobium(TypeIISuperconductor):
     penetration_depth: float = 36e-9
     coherence_length: float = 40e-9
     # gap_temperature: float = 17.67
-    room_temperature_resistivity: float = 147e-9
-    carrier_density = 5.56e+22 * 1e+6  # convert cm(-3) to m(-3)
+    room_temperature_resistivity: float = 152-9
+    carrier_density = 5.56e22 * 1e6  # convert cm(-3) to m(-3)
 
     def __init__(
             self,
