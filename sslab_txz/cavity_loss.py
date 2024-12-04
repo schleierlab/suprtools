@@ -11,8 +11,9 @@ from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from numpy.typing import ArrayLike
 from scipy import odr
-from scipy.constants import c, elementary_charge, hbar, mu_0, pi
+from scipy.constants import c, elementary_charge, hbar
 from scipy.constants import k as k_B
+from scipy.constants import mu_0, pi
 from uncertainties import unumpy as unp
 
 from sslab_txz.plotting import expand_range
@@ -149,6 +150,8 @@ class TypeIISuperconductor(ABC):
                     Deviates at low temperature.
                 - 'eq18'
                     Gurevich eq. 18. Requires hbar omega / 2 k_B T << 1
+                - 'basic'
+                    Gurevich eq. 2 with A = 8.9e+4 nohm K / (GHz**2)
 
         Returns
         -------
@@ -158,6 +161,10 @@ class TypeIISuperconductor(ABC):
         '''
         freq = np.asarray(freq)
         temp = np.asarray(temp)
+        if method == 'basic':
+            a = 8.9e-23
+            return a * freq**2 / temp * np.exp(-self.gap_temperature / temp)
+
 
         omega = 2 * pi * freq
         eta = hbar * omega / (k_B * self.gap_temperature)
