@@ -1,6 +1,6 @@
 from typing import Any, Optional, TypedDict
 
-from matplotlib.typing import ColorType
+from matplotlib.typing import ColorType, LineStyleType
 
 
 class ErrorbarKwargs(TypedDict, total=False):
@@ -8,6 +8,7 @@ class ErrorbarKwargs(TypedDict, total=False):
     label: Any  # anything that can be str()'d
     linewidth: Any
     alpha: Optional[float]
+    linestyle: LineStyleType
 
 
 class AxvspanKwargs(TypedDict, total=False):

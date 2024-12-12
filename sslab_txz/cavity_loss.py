@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Literal, Optional, assert_never, overload
+from typing import Literal, Optional, Unpack, assert_never, overload
 
 import numpy as np
 import scipy.constants
@@ -17,6 +17,7 @@ from scipy.constants import mu_0, pi
 from uncertainties import unumpy as unp
 
 from sslab_txz.plotting import expand_range
+from sslab_txz.typing import ErrorbarKwargs
 
 phi_0 = scipy.constants.physical_constants['mag. flux quantum'][0]
 geom_factor_f = (pi / 4) * scipy.constants.value('characteristic impedance of vacuum')
@@ -432,11 +433,16 @@ class TemperatureFit[T: TypeIISuperconductor]:
         self.fit_result = self.odr.run()
         self.upopt = uncertainties.correlated_values(self.fit_result.beta, self.fit_result.cov_beta)
 
-    def plot(self, plot_limit_finesse: bool = False, ax: Optional[Axes] = None, **errorbar_kw):
+    def plot(
+            self,
+            plot_limit_finesse: bool = False,
+            ax: Optional[Axes] = None,
+            **errorbar_kw: Unpack[ErrorbarKwargs],
+    ):
         if ax is None:
             _, ax = plt.subplots()
 
-        errorbar_kw_default = dict(
+        errorbar_kw_default = ErrorbarKwargs(
             linestyle='None',
             # markersize=1,
             color='C0',
