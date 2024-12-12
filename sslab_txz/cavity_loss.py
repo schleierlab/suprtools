@@ -17,7 +17,7 @@ from scipy.constants import mu_0, pi
 from uncertainties import unumpy as unp
 
 from sslab_txz.plotting import expand_range
-from sslab_txz.typing import ErrorbarKwargs
+from sslab_txz.typing import ErrorbarKwargs, PlotKwargs
 
 phi_0 = scipy.constants.physical_constants['mag. flux quantum'][0]
 geom_factor_f = (pi / 4) * scipy.constants.value('characteristic impedance of vacuum')
@@ -472,17 +472,38 @@ class TemperatureFit[T: TypeIISuperconductor]:
                 va='top',
             )
 
-        # plot_t_range = 1 / np.linspace(1/4, 1/0.3, 100)
-        # plot_t_range = np.linspace(0.3, 4, 200)
-        plot_t_lims = expand_range(self.data.x)
-        plot_t_range = np.linspace(*plot_t_lims, num=200)
-        ax.plot(
-            plot_t_range,
-            self._fitfunc(self.fit_result.beta, plot_t_range),
-            color='C0',
-        )
+        self.plot_fit(ax=ax, color='C0')
 
         ax.set_xlabel('Temperature [K]')
+
+    def plot_fit(
+            self,
+            limit_finesse: Optional[float] = None,
+            ax: Optional[Axes] = None,
+            **kwargs: Unpack[PlotKwargs],
+    ):
+        """
+        limit_finesse: float, optional
+            If provided, plot the fitted BCS finesse curve with the
+            supplied limiting finesse.
+        """
+        if ax is None:
+            _, ax = plt.subplots()
+
+        finesse_limit = self.fit_result.beta[0] if limit_finesse is None else limit_finesse
+
+        plot_t_lims = self.plot_t_lims()
+        plot_t_range = np.linspace(plot_t_lims[0], plot_t_lims[1], num=200)
+        # not *plot_t_lims to satisfy mypy
+
+        ax.plot(
+            plot_t_range,
+            self._fitfunc([finesse_limit, self.fit_result.beta[1]], plot_t_range),
+            **kwargs,
+        )
+
+    def plot_t_lims(self):
+        return expand_range(self.data.x)
 
     def superconductor(self) -> T:
         return self.material(residual_resistivity_ratio=self.fit_result.beta[1])
