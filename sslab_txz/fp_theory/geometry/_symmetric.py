@@ -12,8 +12,9 @@ from typing import Literal, Optional, assert_never
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from scipy.constants import c, epsilon_0, pi
+from scipy.constants import c, epsilon_0
 from scipy.constants import h as planck_h
+from scipy.constants import pi
 from uncertainties import UFloat, ufloat
 from uncertainties import unumpy as unp
 
@@ -23,7 +24,8 @@ from sslab_txz.fp_theory.coupling import NearConfocalCouplingMatrix
 from sslab_txz.fp_theory.coupling_config import CouplingConfig
 from sslab_txz.fp_theory.geometry._base import CavityGeometry
 from sslab_txz.fp_theory.modes import ScalarModeBasis
-from sslab_txz.fp_theory.operators import ScalarModeOperator, VectorModeOperator
+from sslab_txz.fp_theory.operators import (ScalarModeOperator,
+                                           VectorModeOperator)
 
 
 class SymmetricCavityGeometry(CavityGeometry):
