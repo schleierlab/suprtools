@@ -11,6 +11,7 @@ class PlotKwargs(TypedDict, total=False):
     label: Any  # anything that can be str()'d
     linestyle: LineStyleType
     linewidth: float
+    rasterized: bool
 
 
 class ErrorbarKwargs(PlotKwargs, total=False):

@@ -3,7 +3,7 @@ import datetime
 import functools
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Callable, Literal, Optional, Self
+from typing import Any, Callable, Literal, Optional, Self, Unpack
 
 import h5py
 import matplotlib.gridspec
@@ -25,6 +25,7 @@ from sslab_txz.fp_theory.coupling_config import CouplingConfig
 from sslab_txz.fp_theory.geometry._symmetric import SymmetricCavityGeometry
 from sslab_txz.plotting import sslab_style
 from sslab_txz.rf.errors import FitFailureError
+from sslab_txz.typing import PlotKwargs
 
 
 class ScanDataFilter:
@@ -253,7 +254,8 @@ class WideScanNetwork(rf.Network):
             sexy: bool = True,
             fig: Optional[Figure] = None,
             axs: Optional[NDArray] = None,
-            **kwargs):
+            **kwargs: Unpack[PlotKwargs],
+    ):
         if not isinstance(downsample, int):
             raise TypeError
         elif downsample <= 0:
@@ -291,6 +293,7 @@ class WideScanNetwork(rf.Network):
         if filt is not None:
             unfiltered_axs = axs[0::2]
 
+        plot_kw_default = PlotKwargs(rasterized=True, linewidth=0.75)
         for ax, offset in zip(unfiltered_axs, offsets):
             offset_center_freq_ghz = center_freq_ghz + offset * fsr_guess_ghz
 
@@ -299,8 +302,7 @@ class WideScanNetwork(rf.Network):
                 subnet.f[downsampling_slice] / 1e9 - fsr_guess_ghz * offset,
                 rf.complex_2_db(subnet.s.flatten()[downsampling_slice] * scale),
                 label=fr'${offset:+d}\times {fsr_guess_ghz}$ GHz',
-                rasterized=True,
-                **kwargs,
+                **(plot_kw_default | kwargs),
             )
 
         if filt is not None:
@@ -321,8 +323,7 @@ class WideScanNetwork(rf.Network):
                     subnet.f[downsampling_slice] / 1e9 - fsr_guess_ghz * offset,
                     filtered_magnitude[downsampling_slice],
                     label=fr'${offset:+d}\times {fsr_guess_ghz}$ GHz',
-                    rasterized=True,
-                    **kwargs,
+                    **(plot_kw_default | kwargs),
                 )
                 # ax.plot(
                 #     subnet.f[peak_inds] / 1e9 - fsr_guess_ghz * offset,
