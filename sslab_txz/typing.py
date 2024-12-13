@@ -1,5 +1,6 @@
-from typing import Any, Optional, TypedDict
+from typing import Any, Literal, Optional, TypedDict
 
+from matplotlib.colors import Colormap, Normalize
 from matplotlib.typing import ColorType, LineStyleType
 
 
@@ -25,3 +26,13 @@ class ErrorbarKwargs(PlotKwargs, total=False):
 class AxvspanKwargs(TypedDict, total=False):
     color: ColorType
     alpha: Optional[float]
+
+
+class PcolorKwargs(TypedDict, total=False):
+    cmap: str | Colormap
+    norm: str | Normalize
+    vmin: float
+    vmax: float
+
+class TripcolorKwargs(PcolorKwargs, total=False):
+    shading: Literal['flat', 'gouraud']
