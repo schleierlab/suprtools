@@ -10,6 +10,14 @@ columnwidth_pts = 246
 columnwidth_mpl_in = 5  # dimension for for plt.subplots()
 textwidth_mpl_in = columnwidth_mpl_in * textwidth_pts / columnwidth_pts
 
+
+annotation_arrowprops_default = dict(
+    color='0.3',
+    shrinkA=0,
+    shrinkB=0,
+)
+
+
 polarization_markers = ('.', 'x')
 
 

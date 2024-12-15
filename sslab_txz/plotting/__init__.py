@@ -10,6 +10,7 @@ from matplotlib.ticker import AutoMinorLocator
 from numpy.typing import ArrayLike
 
 from ._angleannotation import AngleAnnotation as AngleAnnotation
+from .style import annotation_arrowprops_default
 
 
 def minor_ticks_on(ax, which='both'):
@@ -186,22 +187,13 @@ def annotate_length(
     right_endpt = np.asarray(right_endpt)
 
     midpt = (left_endpt + right_endpt) / 2
-    arrowprops_default = dict(
-        arrowstyle='<|-|>',
-        # width=0.5,
-        # headwidth=4,
-        # headlength=8,
-        color='0.3',
-        shrinkA=1,
-        shrinkB=1,
-    )
     ax.annotate(
         '',
         xy=left_endpt,
         xycoords=ax.transData,
         xytext=right_endpt,
         textcoords=ax.transData,
-        arrowprops=(arrowprops_default | arrowprops),
+        arrowprops=(annotation_arrowprops_default | dict(arrowstyle='<|-|>') | arrowprops),
     )
 
     linevec_x, linevec_y = right_endpt - left_endpt
@@ -220,6 +212,26 @@ def annotate_length(
         textcoords='offset points',
         horizontalalignment=horizontalalignment,
         verticalalignment=verticalalignment,
+    )
+
+
+def annotate_radius(
+        ax: Axes, text: str,
+        center_xy, radius, annotation_angle, annotation_distance,
+        arrowprops=dict()):
+    center_xy = np.asarray(center_xy)
+
+    unit_vec = np.array([np.cos(annotation_angle), np.sin(annotation_angle)])
+    annotation_xy = center_xy + radius * unit_vec
+    text_xy = center_xy + (radius + annotation_distance) * unit_vec
+
+    ax.annotate(
+        text,
+        xy=annotation_xy,
+        xycoords='data',
+        xytext=text_xy,
+        textcoords='data',
+        arrowprops=(annotation_arrowprops_default | dict(arrowstyle='-|>') | arrowprops)
     )
 
 
