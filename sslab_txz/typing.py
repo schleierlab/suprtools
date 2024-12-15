@@ -36,3 +36,11 @@ class PcolorKwargs(TypedDict, total=False):
 
 class TripcolorKwargs(PcolorKwargs, total=False):
     shading: Literal['flat', 'gouraud']
+
+
+class PolyCollectionKwargs(TypedDict, total=False):
+    color: ColorType
+
+
+class FillBetweenKwargs(PolyCollectionKwargs, total=False):
+    pass
