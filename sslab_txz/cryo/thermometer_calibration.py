@@ -502,9 +502,9 @@ class ChebyshevFit(ThermometerCalibration):
             s=1
         )
 
-        ax.set_xlabel('Fiducial temperature [K]')
-        ax_resid.set_xlabel('Fit residual [K]')
-        axs[0].set_ylabel(r'Resistance [$\Omega$]')
+        ax.set_xlabel('Fiducial temperature (K)')
+        ax_resid.set_xlabel('Fit residual (K)')
+        axs[0].set_ylabel(R'Resistance ($\Omega$)')
 
         # ax.set_xscale('log')
         # ax.set_yscale('log')
@@ -659,10 +659,10 @@ class LogLogPolyFit(ThermometerCalibration):
             s=1,
         )
 
-        axs[-1].set_xlabel('Fiducial temperature [K]')
-        ax_resid.set_ylabel(r'Fit residual [$\Omega$]')
-        ax.set_ylabel(r'Resistance [$\Omega$]')
-        ax_uncert.set_ylabel(r'Temperature deviation [K]')
+        axs[-1].set_xlabel('Fiducial temperature (K)')
+        ax_resid.set_ylabel(R'Fit residual ($\Omega$)')
+        ax.set_ylabel(R'Resistance ($\Omega$)')
+        ax_uncert.set_ylabel(R'Temperature deviation (K)')
 
         ax.set_xscale('log')
         # ax.set_yscale('log')

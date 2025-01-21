@@ -255,8 +255,8 @@ class TEM00Fit:
             alpha=0.7,
         )
 
-        ax_freq.set_ylabel('Frequency mod FSR [GHz]')
-        ax_resid.set_ylabel('Residuals [kHz]')
+        ax_freq.set_ylabel('Frequency mod FSR (GHz)')
+        ax_resid.set_ylabel('Residuals (kHz)')
         axs[-1].set_xlabel('Longitudinal mode index $q$')
         axs[0].add_artist(self._fit_info_box(loc='lower right', method=method))
         axs[0].add_artist(fit_format_at)

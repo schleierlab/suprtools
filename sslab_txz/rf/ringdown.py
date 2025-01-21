@@ -396,7 +396,7 @@ class Ringdown(RingdownSet):
             **kwargs,
         )
         ax.legend(fontsize='x-small')
-        ax.set_ylabel('$|S_{21}|$ [dB]')
+        ax.set_ylabel('$|S_{21}|$ (dB)')
 
     def plot_phase(
             self,
@@ -470,7 +470,7 @@ class Ringdown(RingdownSet):
         axs['deg'].legend(fontsize='x-small')
         axs['reim'].legend(fontsize='x-small')
 
-        axs['deg'].set_xlabel(R'Time [$\mu$s]')
+        axs['deg'].set_xlabel(R'Time ($\mu$s)')
         axs['reim'].set_xlabel(fR'${reim_scale_latex} \times \operatorname{{Re}} S_{{21}}$')
         axs['reim'].set_ylabel(fR'${reim_scale_latex} \times \operatorname{{Im}} S_{{21}}$')
 
@@ -953,7 +953,7 @@ class RingdownSetSweep:
         if ax_fin is None:
             plot_ax.set_yscale('log')
             plot_ax.set_ylabel('Finesse')
-            plot_ax.set_xlabel('Probe extension [mm]')
+            plot_ax.set_xlabel('Probe extension (mm)')
             plot_ax.legend(
                 fontsize='x-small',
                 ncols=2,
@@ -1004,7 +1004,7 @@ class RingdownSetSweep:
 
         if ax is None:
             plot_ax.set_title(R'All $\mathrm{TEM}_{00}$ modes')
-            plot_ax.set_xlabel('Frequency [GHz]')
+            plot_ax.set_xlabel('Frequency (GHz)')
             plot_ax.set_ylabel('Finesse')
             plot_ax.set_yscale('log')
             sslab_style(plot_ax)

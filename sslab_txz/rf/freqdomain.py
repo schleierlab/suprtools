@@ -280,7 +280,7 @@ class WideScanNetwork(rf.Network):
                 sharex='col',
                 constrained_layout=True,
             )
-            fig.supxlabel('Frequency [GHz]')
+            fig.supxlabel('Frequency (GHz)')
             if sexy:
                 for ax in axs:
                     sslab_style(ax)
@@ -394,7 +394,7 @@ class WideScanNetwork(rf.Network):
                 )
 
         if filt is None:
-            fig.supylabel('$S_{21}$ [dB]')
+            fig.supylabel('$S_{21}$ (dB)')
 
         fig.align_labels(axs=axs)
         return fig, axs
@@ -803,8 +803,8 @@ class VectorFittingFancy(rf.VectorFitting):
         for ax in ax_mag, ax_phase, ax_iq_zoom:
             sslab_style(ax)
 
-        ax_mag.set_ylabel('$S_{21}$ [dB]')
-        ax_phase.set_ylabel('Phase [deg]')
+        ax_mag.set_ylabel('$S_{21}$ (dB)')
+        ax_phase.set_ylabel('Phase (deg)')
 
         polar_scale_log = np.log10(polar_scale)
         if polar_scale_log % 1 == 0:
@@ -834,7 +834,7 @@ class VectorFittingFancy(rf.VectorFitting):
             offset_unit_str = 'GHz'
 
         plot_unit_str = freq_obj.unit_dict[plot_unit]
-        freq_label = f'$\\mathrm{{Frequency}} - {xoffset}$ {offset_unit_str} [{plot_unit_str}]'
+        freq_label = f'$\\mathrm{{Frequency}} - {xoffset}$ {offset_unit_str} ({plot_unit_str})'
         ax_phase.set_xlabel(freq_label)
 
         def major_formatter(x, pos):

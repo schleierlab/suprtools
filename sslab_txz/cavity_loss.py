@@ -474,7 +474,7 @@ class TemperatureFit[T: TypeIISuperconductor]:
 
         self.plot_fit(ax=ax, color='C0')
 
-        ax.set_xlabel('Temperature [K]')
+        ax.set_xlabel('Temperature (K)')
 
     def plot_fit(
             self,

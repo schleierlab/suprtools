@@ -113,12 +113,12 @@ class CWMeasurement:
         if ax is None:
             _, ax = plt.subplots(layout='constrained')
             ax = cast(Axes, ax)
-            ax.set_xlabel('Frequency [Hz]')
+            ax.set_xlabel('Frequency (Hz)')
 
             if units == 'amplitude':
-                ax.set_ylabel(R'Amplitude spectral density [U/$\sqrt{\mathrm{Hz}}$]')
+                ax.set_ylabel(R'Amplitude spectral density (U/$\sqrt{\mathrm{Hz}}$)')
             elif units == 'power':
-                ax.set_ylabel('Power spectral density [U$^2$/Hz]')
+                ax.set_ylabel('Power spectral density (U$^2$/Hz)')
 
         fft = np.fft.fft(self.s21, axis=-1, norm='ortho') / np.sqrt(self.f_sample)
         mean_pow_spec = np.mean(np.abs(scale * fft)**2, axis=0)
@@ -154,12 +154,12 @@ class CWMeasurement:
         if ax is None:
             _, ax = plt.subplots(layout='constrained')
             ax = cast(Axes, ax)
-            ax.set_xlabel('Frequency [Hz]')
+            ax.set_xlabel('Frequency (Hz)')
 
             if units == 'amplitude':
-                ax.set_ylabel('Integrated rms amplitude [U]')
+                ax.set_ylabel('Integrated rms amplitude (U)')
             elif units == 'power':
-                ax.set_ylabel('Integrated power [U$^2$]')
+                ax.set_ylabel('Integrated power (U$^2$)')
 
         fft = np.fft.fft(self.s21, axis=-1, norm='ortho') / np.sqrt(self.f_sample)
         mean_pow_spec = np.mean(np.abs(scale * fft)**2, axis=0)

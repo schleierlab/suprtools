@@ -95,7 +95,7 @@ class QuadraticFit:
 
         ax.set_aspect('equal')
         cbar = fig.colorbar(im, ax=ax)
-        cbar.set_label(R'$z$ [$\mu$m]')
+        cbar.set_label(R'$z$ ($\mu$m)')
         ax.set_title('Raw data')
 
     def plot_summary(self):
@@ -119,8 +119,8 @@ class QuadraticFit:
         axs[1, 1].set_title('Uncertainty correlations')
 
         for ax in axs.ravel()[:3]:
-            ax.set_xlabel(R'$x$ [$\mu$m]')
-            ax.set_ylabel(R'$y$ [$\mu$m]')
+            ax.set_xlabel(R'$x$ ($\mu$m)')
+            ax.set_ylabel(R'$y$ ($\mu$m)')
 
     def curvature(self):
         axx, axy, ayy = self.upopt[3:]
@@ -209,9 +209,9 @@ class QuadraticFit:
         title_lines = [roughness_str]
         if is_ax_fresh:
             cbar = fig.colorbar(im, ax=ax)
-            cbar.set_label('$z - z^{(2)}$ [nm]')
-            ax.set_xlabel(R'$x$ [$\mu$m]')
-            ax.set_ylabel(R'$y$ [$\mu$m]')
+            cbar.set_label('$z - z^{(2)}$ (nm)')
+            ax.set_xlabel(R'$x$ ($\mu$m)')
+            ax.set_ylabel(R'$y$ ($\mu$m)')
             title_lines = ['Quadratic fit residuals', roughness_str]
         ax.set_title('\n'.join(title_lines))
 
@@ -237,10 +237,10 @@ class QuadraticFit:
         im = ax.pcolormesh(x_um, y_um, self.mirror_data_window - self.linear_fit_result(x_um, y_um))
         cbar = fig.colorbar(im, ax=ax)
         ax.set_title('Linear fit residuals')
-        cbar.set_label('$z - z^{(1)}$ [nm]')
+        cbar.set_label('$z - z^{(1)}$ (nm)')
 
-        ax.set_xlabel(R'$x$ [$\mu$m]')
-        ax.set_ylabel(R'$y$ [$\mu$m]')
+        ax.set_xlabel(R'$x$ ($\mu$m)')
+        ax.set_ylabel(R'$y$ ($\mu$m)')
 
     def linear_fit_result(self, x, y):
         a0, ax, ay = self.popt[0:3]
