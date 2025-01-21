@@ -937,7 +937,7 @@ class RingdownSetSweep:
 
                 print(f'{q=}, beam_enlarge fudge: {fit.uvars['beam_enlarge_factor']:S}, probe_loss fudge: {fit.uvars['probe_loss_factor']:S}')
 
-                r_space = 1e-3 * np.linspace(*expand_range(stage_pos, factor=1.15))
+                r_space = 1e-3 * np.linspace(*expand_range(stage_pos, factor=1.1))
                 plot_kw = (
                     self.kwarg_func(frequency, q, +1)
                     | dict(alpha=1, marker=None)
