@@ -11,9 +11,8 @@ from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from numpy.typing import ArrayLike
 from scipy import odr
-from scipy.constants import c, elementary_charge, hbar
+from scipy.constants import c, elementary_charge, hbar, mu_0, pi
 from scipy.constants import k as k_B
-from scipy.constants import mu_0, pi
 from uncertainties import unumpy as unp
 
 from sslab_txz.plotting import expand_range
