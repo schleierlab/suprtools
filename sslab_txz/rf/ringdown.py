@@ -555,10 +555,36 @@ class RingdownCollectiveFit:
             xscale=1,
             data_kw=dict(),
             model_kw=dict(),
-            legend_kw=dict(),
+            legend_kw: Optional[Mapping] = dict(),
             xrange: Optional[tuple[Optional[float], Optional[float]]] = None,
             normalized: bool = False,
     ):
+        '''
+        Plot the norm-squared of the offset-subtracted signal together
+        with the theoretical exponential-plus-constant form we fitted.
+
+        Parameters
+        ----------
+        ax: Axes, optional
+            If supplied, plot the fit in `ax`.
+        xscale: scalar
+            Factor by which to multiply the time (x-) axis values, which
+            by default are given in seconds (s). For example, passing in
+            xscale=1e+3 plots the trace in milliseconds (ms).
+        data_kw, model_kw: Mapping
+            Keyword arguments for plotting the data and model, resp.
+            Passed in each case to Axes.plot.
+        legend_kw: Mapping or None, optional
+            Keyword arguments for the legend. If None, do not draw a
+            legend.
+        xrange: 2-tuple of (float or None), optional
+            If supplied, only plots the data bounded by the limits. The
+            limits should be given as (lower_bound, upper_bound) in
+            units of seconds (s) even if xscale != 1.
+            A value of None in either limit means not applying a bound.
+        normalized: bool, optional
+            If True, normalize to the starting value of the fit.
+        '''
         if ax is None:
             fig, ax = plt.subplots()
         if self.fit_result is None:
@@ -593,7 +619,8 @@ class RingdownCollectiveFit:
             **(model_kw_default | model_kw),
         )
         ax.set_yscale('log')
-        ax.legend(**legend_kw)
+        if legend_kw is not None:
+            ax.legend(**legend_kw)
 
     def _repr_html_(self) -> Optional[str]:
         if self.fit_result is None:
