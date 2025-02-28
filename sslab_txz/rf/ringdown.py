@@ -558,6 +558,7 @@ class RingdownCollectiveFit:
             legend_kw: Optional[Mapping] = dict(),
             xrange: Optional[tuple[Optional[float], Optional[float]]] = None,
             normalized: bool = False,
+            noise_removed: bool = False,
     ):
         '''
         Plot the norm-squared of the offset-subtracted signal together
@@ -584,6 +585,8 @@ class RingdownCollectiveFit:
             A value of None in either limit means not applying a bound.
         normalized: bool, optional
             If True, normalize to the starting value of the fit.
+        noise_removed: bool, optional
+            If True, subtract out the noise power from the fit.
         '''
         if ax is None:
             fig, ax = plt.subplots()
@@ -603,9 +606,11 @@ class RingdownCollectiveFit:
             + uvars['a0'].n * np.exp(-2 * pi * uvars['fwhm'].n * masked_time)
         norm_factor = fit_values[0] if normalized else 1
 
+        maybe_noise_offset = uvars['const'].n if noise_removed else 0
+
         ax.plot(
             xscale * masked_time,
-            mean_ringdown_power / norm_factor,
+            (mean_ringdown_power - maybe_noise_offset) / norm_factor,
             **data_kw,
         )
 
@@ -615,7 +620,7 @@ class RingdownCollectiveFit:
         )
         ax.plot(
             xscale * masked_time,
-            fit_values / norm_factor,
+            (fit_values - maybe_noise_offset) / norm_factor,
             **(model_kw_default | model_kw),
         )
         ax.set_yscale('log')
