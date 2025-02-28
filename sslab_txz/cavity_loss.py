@@ -113,6 +113,10 @@ class TypeIISuperconductor(ABC):
         denominator = np.sqrt(np.abs(purity_a**2 - 1))
         return self.penetration_depth * np.sqrt(purity_a / (pi/2 - numerator / denominator))
 
+    @property
+    def effective_coherence_length(self):
+        return 1 / (1 / self.coherence_length + 1 / self.mean_free_path)
+
     BCSMethod = Literal['numeric', '1216', 'sinhlin', 'eq18', 'basic']
 
     @property
