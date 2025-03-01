@@ -12,9 +12,8 @@ from typing import Literal, Optional, assert_never
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from scipy.constants import c, epsilon_0
+from scipy.constants import c, epsilon_0, pi
 from scipy.constants import h as planck_h
-from scipy.constants import pi
 from uncertainties import UFloat, ufloat
 from uncertainties import unumpy as unp
 
@@ -24,8 +23,14 @@ from sslab_txz.fp_theory.coupling import NearConfocalCouplingMatrix
 from sslab_txz.fp_theory.coupling_config import CouplingConfig
 from sslab_txz.fp_theory.geometry._base import CavityGeometry
 from sslab_txz.fp_theory.modes import ScalarModeBasis
-from sslab_txz.fp_theory.operators import (ScalarModeOperator,
-                                           VectorModeOperator)
+from sslab_txz.fp_theory.operators import (
+    ScalarModeOperator,
+    VectorModeOperator,
+    a_minus,
+    a_minus_dag,
+    a_plus,
+    a_plus_dag,
+)
 
 
 class SymmetricCavityGeometry(CavityGeometry):
@@ -215,7 +220,7 @@ class SymmetricCavityGeometry(CavityGeometry):
     def mode_volume(self, longi_ind: ArrayLike):
         '''
         The mode volume of a TEM(00) mode:
-            L lambda z_0 / 4 = pi L w0^2 / 4
+            L lambda z_R / 4 = pi L w0^2 / 4
 
         Parameters
         ----------
@@ -374,6 +379,7 @@ class SymmetricCavityGeometry(CavityGeometry):
             if not include_bool:
                 continue
 
+            # factor of two -- symmetric biconcave vs plano-concave cavity
             contrib = 2 * op.toarray(scalar_basis)[0]
             if xcouple_bool:
                 matrix += contrib
@@ -392,15 +398,25 @@ class SymmetricCavityGeometry(CavityGeometry):
                 dimless_operator = h_astig_nocrosscouple_dimless
 
             h_astig_cyc = self.eta_astig / (2 * pi) * np.sqrt(self.alpha**2 - 1) * dimless_operator
+
+            # factor for symmetric biconcave vs plano-concave (see above)
             matrix += 2 * h_astig_cyc.vectorize().toarray(scalar_basis)[0]
 
         if config.v_plus_a:
             h_v_plus_a_dimless = VectorModeOperator([
-                [0, 1 - ops.nplus + ops.nminus],
-                [1 + ops.nplus - ops.nminus, 0],
+                [0, 1],
+                [1, 0],
             ])
+            if config.vec_xcoupling:
+                xcouple_term = (a_plus**2 + a_minus**2 + a_plus_dag**2 + a_minus_dag**2) / 2
+                h_v_plus_a_dimless += VectorModeOperator([
+                    [xcouple_term, 0],
+                    [0, -xcouple_term],
+                ])
 
             h_v_plus_a = - self.eta_astig / (2 * pi_k_rm) * h_v_plus_a_dimless
+
+            # factor of two: ditto above
             matrix += 2 * h_v_plus_a.toarray(scalar_basis)[0]
 
         mode_generalized_parities = np.array([
