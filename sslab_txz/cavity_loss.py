@@ -475,7 +475,7 @@ class TemperatureFit[T: TypeIISuperconductor]:
                 va='top',
             )
 
-        self.plot_fit(ax=ax, color='C0')
+        self.plot_fit(ax=ax, color=(errorbar_kw['color'] or 'C0'))
 
         ax.set_xlabel('Temperature (K)')
 
