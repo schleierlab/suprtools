@@ -8,9 +8,11 @@ from __future__ import annotations
 import importlib.resources
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Callable, Literal, Optional, cast, overload
+from typing import Any, Callable, Literal, Optional, assert_never, cast, overload
 
+import arc
 import lmfit
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.special
@@ -22,13 +24,14 @@ from lmfit.model import ModelResult
 from lmfit.models import LinearModel
 from matplotlib.axes import Axes
 from matplotlib.container import ErrorbarContainer
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 from PIL import Image
 from scipy.constants import pi
 from tqdm import tqdm
 from uncertainties import UFloat, ufloat
 from uncertainties import unumpy as unp
 
+import sslab_txz.rydberg as rydtools
 from sslab_txz._typing import StrPath
 from sslab_txz.fp_theory.geometry._symmetric import SymmetricCavityGeometry
 from sslab_txz.plotting import expand_range, sslab_style
@@ -36,6 +39,10 @@ from sslab_txz.plotting.style import kwarg_func_factory
 from sslab_txz.rf.couplers import Probe
 from sslab_txz.rf.cw import CWMeasurement
 from sslab_txz.rf.errors import FitFailureError
+from sslab_txz.rydberg import RydbergTransitionSeries
+from sslab_txz.typing import ErrorbarKwargs, ModeSpec
+
+matplotlib.style.use('default')  # to get rid of ugly arc style
 
 
 class RingdownSet(CWMeasurement):
@@ -1050,3 +1057,258 @@ class RingdownSetSweep:
             plot_ax.set_ylabel('Finesse')
             plot_ax.set_yscale('log')
             sslab_style(plot_ax)
+
+    def cooperativity_plot(
+            self,
+            series: RydbergTransitionSeries,
+            modes: Sequence[int],
+            polarizations: Sequence[Literal[1, -1]],
+            ax: Optional[Axes] = None,
+            freqscale: float = 1e+9,
+            finesse_func: Optional[Callable] = None,
+    ):
+        if ax is None:
+            fig, ax_eta = plt.subplots()
+        else:
+            ax_eta = ax
+
+        power_laws = series.power_law_params()
+        def get_cooperativity(freq, get_finesse: Sequence[float] | Callable[[ArrayLike], ArrayLike]):
+            # convert units from e a_0 to SI
+            d = power_laws['d'](freq) * scipy.constants.elementary_charge * scipy.constants.value('Bohr radius')
+            vac_field = self.geometry.waist_vacuum_field_fromfreq(freq)
+            vacuum_rabi_freq = 2 * d * vac_field / scipy.constants.Planck / (1 if series.polarization == 0 else np.sqrt(2))
+
+            # 2g, in 2pi Hz
+            ugammas = 1 / (2 * pi * power_laws['lifetime'](freq))
+
+            ukappas: NDArray
+            if callable(get_finesse):
+                ukappas = self.geometry.fsr / np.asarray(get_finesse(freq))
+            else:
+                ukappas = self.geometry.fsr / np.asarray(get_finesse)
+
+            return vacuum_rabi_freq ** 2 / (ugammas * ukappas)
+
+        for pol_ind, pol in enumerate(polarizations):
+            highest_finesses = self.highest_finesse_values(lambda q, p: q in modes and p == pol)
+
+            pol_axis = 'x' if pol == +1 else 'y'
+            marker = '.' if pol == +1 else 'x'
+
+            freqs = highest_finesses['freq']
+            uetas = get_cooperativity(freqs, highest_finesses['finesse'])
+
+            linestyle_dict = (
+                ErrorbarKwargs()
+                if finesse_func is None else
+                ErrorbarKwargs(linestyle='None')
+            )
+            ax_eta.errorbar(
+                freqs / freqscale,
+                unp.nominal_values(uetas),
+                unp.std_devs(uetas),
+                label=f'{series.label}, ${pol_axis}$-polarized',
+                marker=marker,
+                **(series.plot_kw | linestyle_dict),
+            )
+
+            # TODO clean this duplicative code up... a lot
+            if finesse_func is not None:
+                freq_space = np.linspace(*expand_range(freqs, factor=1.15))
+
+                ax_eta.plot(
+                    freq_space / freqscale,
+                    unp.nominal_values(get_cooperativity(freq_space, finesse_func)),
+                    **series.plot_kw,
+                )
+
+                transition_freqs = np.abs(series.transition_frequencies())
+                transition_etas = unp.nominal_values(get_cooperativity(transition_freqs, finesse_func))
+                ax_eta.plot(
+                    transition_freqs / freqscale,
+                    transition_etas,
+                    marker='|',
+                    color='0.5',
+                    linestyle='None',
+                )
+                for n, freq, eta in zip(series.n_range, transition_freqs, transition_etas):
+                    ax_eta.annotate(
+                        str(n),  # (f'$n = {n}$' if n == max(series.n_range) else f'${n}$'),
+                        xy=(freq / freqscale, eta),
+                        xytext=(0, 7),
+                        textcoords='offset points',
+                        color='0.5',
+                        horizontalalignment='center',
+                        verticalalignment='baseline',
+                        fontsize='x-small',
+                    )
+
+        if ax is None:
+            unit = {1: 'Hz', 1e+3: 'kHz', 1e+6: 'MHz', 1e+9: 'GHz'}[freqscale]
+            ax_eta.set_xlabel(f'Frequency ({unit})')
+            ax_eta.set_ylabel('Cooperativity')
+            ax_eta.set_yscale('log')
+
+    def cooperativity_summary_plot(
+            self,
+            transition_spec: arc.AlkaliAtom | Sequence[RydbergTransitionSeries] = arc.Cesium(),
+    ):
+        serieses: Sequence[RydbergTransitionSeries]
+        if isinstance(transition_spec, arc.AlkaliAtom):
+            serieses = rydtools.get_common_series(transition_spec)
+        elif isinstance(transition_spec, Sequence):
+            serieses = transition_spec
+        else:
+            assert_never(transition_spec)
+
+        fig, axs = plt.subplots(figsize=(15, 8), nrows=3, ncols=3, sharex=True, layout='constrained')
+
+        (ax_d, ax_e, ax_g), (ax_gamma, ax_kappa, ax_fin), (ax_ggamma, ax_gkappa, ax_eta) = axs.T
+        ax_d.set_ylabel('Dipole matrix element [$ea_0$]')
+
+        # upper n in transition
+        # n_upper = np.arange(38, 50, dtype=np.float64)
+        # n_lower = n_upper - 1
+        # dipole_mat_elt = n_upper**2 / np.sqrt(2)
+
+        ### these analytical values (from Haroche book) agree with the ARC calculations
+
+        # plot_single_rydberg_line(
+        #     (n_lower**(-2) - n_upper**(-2)) * rydfreq,
+        #     n_upper**2 / np.sqrt(2),
+        #     n_upper,
+        #     label=r'$(n-1)C \to nC$, analytic',
+        #     ax=ax_d,
+        # )
+
+        # plot_single_rydberg_line(
+        #     (n_lower**(-2) - n_upper**(-2)) * rydfreq,
+        #     3/4 * n_upper**5 * scipy.constants.alpha**(-3) / (2 * pi * scipy.constants.value('Rydberg constant times c in Hz')),
+        #     n_upper,
+        #     label=r'$nC$, analytic',
+        #     ax=ax_gamma,
+        # )
+
+        cavity_longi_inds = np.arange(self.q_range[0], self.q_range[1] + 1)
+
+        cavity_freqs = self.geometry.paraxial_frequency(cavity_longi_inds, 0)
+        vac_fields = self.geometry.waist_vacuum_field_fromfreq(cavity_freqs)
+        ax_e.plot(
+            cavity_freqs,
+            vac_fields,
+            marker='.',
+            color='0.5',
+        )
+        for i in [0, -1]:
+            ax_e.annotate(
+                f'$q = {int(cavity_longi_inds[i]):d}$', (cavity_freqs[i], vac_fields[i]),
+            )
+
+        ax_e.set_title(r'$E_\text{rms} \sim \omega$')
+        ax_e.set_ylabel('Vacuum rms field [V/m]')
+
+        for pol in [+1, -1]:
+            highest_finesses = self.highest_finesse_values(lambda q, p: p == pol)
+
+            pol_axis = 'x' if pol == +1 else 'y'
+            marker = '.' if pol == +1 else 'x'
+            freqs = highest_finesses['freq']
+            fins_n = unp.nominal_values(highest_finesses['finesse'])
+            fins_s = unp.std_devs(highest_finesses['finesse'])
+            ufins = unp.uarray(fins_n, fins_s)
+
+            finesse_kw = dict(
+                marker=marker,
+                color='0.5',
+            )
+
+            ax_fin.errorbar(
+                freqs,
+                fins_n,
+                fins_s,
+                **finesse_kw,
+            )
+
+            ukappas = self.geometry.fsr_u / ufins  # 2pi Hz
+            ax_kappa.errorbar(
+                freqs,
+                unp.nominal_values(ukappas),
+                unp.std_devs(ukappas),
+                **finesse_kw,
+            )
+
+        for series in serieses:
+            series.plot_numbers(ax_d, ax_gamma)
+            power_laws = series.power_law_params()
+
+            for pol_ind, pol in enumerate([+1, -1]):
+                highest_finesses = self.highest_finesse_values(lambda q, p: p == pol)
+
+                pol_axis = 'x' if pol == +1 else 'y'
+                marker = '.' if pol == +1 else 'x'
+                freqs = highest_finesses['freq']
+                fins_n = unp.nominal_values(highest_finesses['finesse'])
+                fins_s = unp.std_devs(highest_finesses['finesse'])
+                ufins = unp.uarray(fins_n, fins_s)
+                ukappas = self.geometry.fsr / ufins  # 2pi * Hz
+
+                # convert units from e a_0 to SI
+                d_interp = power_laws['d'](freqs) * scipy.constants.elementary_charge * scipy.constants.value('Bohr radius')
+                vac_fields = self.geometry.waist_vacuum_field_fromfreq(freqs)
+
+                # 2g, in 2pi Hz
+                vacuum_rabi_freqs = 2 * d_interp * vac_fields / scipy.constants.Planck / (1 if series.polarization == 0 else np.sqrt(2))
+
+                if pol_ind == 0:
+                    ax_g.plot(
+                        freqs,
+                        vacuum_rabi_freqs,
+                        marker='.',
+                        **series.plot_kw,
+                    )
+
+                ugammas = 1 / (2 * pi * power_laws['lifetime'](freqs))  # in 2pi Hz
+                uetas = vacuum_rabi_freqs**2 / (ugammas * ukappas)
+
+                figs_of_merit = [uetas, vacuum_rabi_freqs / ugammas, vacuum_rabi_freqs / ukappas]
+                axs_fom = [ax_eta, ax_ggamma, ax_gkappa]
+                for ax, ufom in zip(axs_fom, figs_of_merit):
+                    ax.errorbar(
+                        freqs,
+                        unp.nominal_values(ufom),
+                        unp.std_devs(ufom),
+                        label=f'{series.label}, ${pol_axis}$-polarized',
+                        marker=marker,
+                        **series.plot_kw,
+                    )
+
+        ax_d.set_title(R'$d \sim \omega^{-2/3}$')
+        ax_d.legend(fontsize='xx-small')
+
+        ax_g.set_ylabel(R'Vacuum Rabi frequency $2g$ [$2\pi \times$ Hz]')
+        ax_g.set_title(R'$g \sim \omega^{1/3}$')
+
+        ax_gamma.set_title(R'$\Gamma^{-1}_\text{low-l} \sim \omega^{-1}$, $\Gamma^{-1}_C \sim \omega^{-5/3}$')
+        ax_gamma.set_ylabel(R'State lifetimes [s]')
+
+        ax_gamma.legend(ncols=2, fontsize='xx-small')
+
+        ax_kappa.set_title(R'$\kappa$')
+        ax_kappa.set_ylabel(R'Cavity linewidth [$2\pi\times$ Hz]')
+
+        ax_fin.set_ylabel('Measured cavity finesse')
+
+        ax_eta.set_ylabel(R'Cooperativity $4g^2/\kappa\Gamma$')
+        ax_eta.legend(ncols=2, fontsize='xx-small')
+
+        ax_ggamma.set_title(R'$2g/\Gamma_{\text{low-l}} \sim \omega^{-2/3}$, $2g/\Gamma_C \sim \omega^{-4/3}$')
+        ax_ggamma.set_ylabel(R'$2g/\Gamma$')
+        ax_gkappa.set_ylabel(R'$2g/\kappa$')
+
+        for ax in axs.flatten():
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+
+        # axs[-1].set_xscale('log')
+        fig.supxlabel('Frequency [Hz]')
