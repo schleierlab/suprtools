@@ -158,7 +158,7 @@ class SymmetricCavityGeometry(CavityGeometry):
         # == w1 / w0
         return np.sqrt(self.mirror_curv_rad / (self.mirror_curv_rad - self.z1))
 
-    def paraxial_frequency(self, longi_ind: ArrayLike, n_total: ArrayLike) -> ArrayLike:
+    def paraxial_frequency(self, longi_ind: ArrayLike, n_total: ArrayLike) -> NDArray:
         '''
         Parameters
         ----------
@@ -238,7 +238,7 @@ class SymmetricCavityGeometry(CavityGeometry):
         wavelength = c / np.asarray(freq)
         return self.z0 * self.length * wavelength / 4
 
-    def waist_vacuum_field(self, longi_ind: ArrayLike) -> ArrayLike:
+    def waist_vacuum_field(self, longi_ind: ArrayLike) -> NDArray:
         '''
         Electric field (rms) for a TEM(00) mode at the mode center with
         with half-photon energy in the mode. Only really makes sense for
@@ -254,8 +254,11 @@ class SymmetricCavityGeometry(CavityGeometry):
         ndarray
             rms vacuum field, in V/m.
         '''
-        mode_volume = self.mode_volume(longi_ind)
         freq = self.paraxial_frequency(longi_ind, 0)
+        return self.waist_vacuum_field_fromfreq(freq)
+
+    def waist_vacuum_field_fromfreq(self, freq: ArrayLike) -> NDArray:
+        mode_volume = self._mode_volume_fromfreq(freq)
         return np.sqrt(planck_h * freq / (2 * epsilon_0 * mode_volume))
 
     @staticmethod
