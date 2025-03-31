@@ -48,3 +48,14 @@ class PolyCollectionKwargs(TypedDict, total=False):
 
 class FillBetweenKwargs(PolyCollectionKwargs, total=False):
     pass
+
+
+FontSizeSpec = Literal['xx-small', 'x-small', 'small', 'medium', 'large', 'x-large', 'xx-large']
+
+class TextKwargs(TypedDict, total=False):
+    fontsize: float | FontSizeSpec
+
+
+class AnnotateKwargs(TextKwargs, total=False):
+    arrowprops: dict
+    annotation_clip: Optional[bool]

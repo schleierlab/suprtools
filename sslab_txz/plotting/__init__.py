@@ -1,6 +1,6 @@
 import re
-from collections.abc import Sequence
-from typing import Any, assert_never, cast
+from collections.abc import Callable, Sequence
+from typing import Any, Unpack, assert_never, cast
 
 import matplotlib
 import numpy as np
@@ -8,6 +8,8 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure, SubFigure
 from matplotlib.ticker import AutoMinorLocator
 from numpy.typing import ArrayLike
+
+from sslab_txz.typing import AnnotateKwargs
 
 from ._angleannotation import AngleAnnotation as AngleAnnotation
 from .style import annotation_arrowprops_default
@@ -235,7 +237,14 @@ def annotate_radius(
     )
 
 
-def annotate_line(ax: Axes, text: str, annotation_x, line_func, offset_pts=(0, 0), **kwargs):
+def annotate_line(
+        ax: Axes,
+        text: str,
+        annotation_x: float,
+        line_func: Callable[[ArrayLike], ArrayLike],
+        offset_pts: tuple[float, float] = (0, 0),
+        **kwargs: Unpack[AnnotateKwargs],
+):
     test_xs = annotation_x + np.array([0, 0.1])
     test_ys = line_func(test_xs)
     plot_xys = np.transpose([test_xs, test_ys])
