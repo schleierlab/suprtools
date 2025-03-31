@@ -637,6 +637,14 @@ class RingdownCollectiveFit:
         self.plot_fit(ax)
         return fig._repr_html_()
 
+    def fwhm_u(self) -> UFloat:
+        if self.fit_result is None:
+            raise ValueError
+        return self.fit_result.uvars['fwhm']
+
+    def fwhm(self) -> float:
+        return self.fwhm_u().n
+
 
 class RingdownScalarFit(RingdownCollectiveFit):
     ringdown_set: Ringdown
@@ -748,7 +756,9 @@ class RingdownScalarFit(RingdownCollectiveFit):
 
 
 class RingdownSetSweep:
+    geometry: SymmetricCavityGeometry
     stage_pos_converter: Callable[[NDArray], NDArray]
+    finesse: dict[ModeSpec, NDArray]
 
     def __init__(
             self,
@@ -841,7 +851,7 @@ class RingdownSetSweep:
             ]
             fwhms = np.array([
                 (
-                    fit.fit_result.uvars['fwhm']
+                    fit.fwhm_u()
                     if (
                         fit is not None
                         and hasattr(fit.fit_result, 'uvars')

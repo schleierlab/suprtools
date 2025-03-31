@@ -3,6 +3,9 @@ from typing import Any, Literal, Optional, TypedDict
 from matplotlib.colors import Colormap, Normalize
 from matplotlib.typing import ColorType, LineStyleType
 
+PolarizationSpec = Literal[+1, -1]
+ModeSpec = tuple[int, PolarizationSpec]
+
 
 class PlotKwargs(TypedDict, total=False):
     # organized alphabetically per
@@ -33,6 +36,7 @@ class PcolorKwargs(TypedDict, total=False):
     norm: str | Normalize
     vmin: float
     vmax: float
+
 
 class TripcolorKwargs(PcolorKwargs, total=False):
     shading: Literal['flat', 'gouraud']
