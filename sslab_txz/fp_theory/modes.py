@@ -80,7 +80,7 @@ class VectorLGMode(ScalarLGMode):
 
 
 class ModeBasis(object):
-    modes: tuple[ScalarLGMode]
+    modes: tuple[ScalarLGMode] | tuple[VectorLGMode]
 
     def __init__(self, modes):
         self.modes = tuple(modes)
@@ -238,6 +238,8 @@ class ScalarModeBasis(ModeBasis):
 
 
 class VectorModeBasis(ModeBasis):
+    modes: tuple[VectorLGMode]
+
     @classmethod
     def make_even_basis(cls, max_order):
         if max_order < 0:
@@ -263,3 +265,10 @@ class VectorModeBasis(ModeBasis):
 
     def latex(self):
         return r'|n_+ n_- \pm\rangle'
+
+    def __add__(self, basis2):
+        if not isinstance(basis2, VectorModeBasis):
+            raise TypeError
+
+        modes = self.modes + basis2.modes
+        return self.__class__(modes)
