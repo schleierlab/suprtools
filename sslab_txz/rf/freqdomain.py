@@ -29,16 +29,27 @@ from sslab_txz.typing import PlotKwargs
 
 
 class ScanDataFilter:
-    def __init__(self, *, fs,  fc_hp=None, fc_lp=None, high_pass_order=0, low_pass_order=0):
+    def __init__(
+            self,
+            *,
+            fs,
+            fc_hp=None,
+            fc_lp=None,
+            high_pass_order=0,
+            low_pass_order=0,
+            gain=1,
+    ):
         '''
         Parameters
         ----------
-        fc_hp, fc_lp : scalar
-            cutoff frequency for high/low-pass filter
         fs : scalar
             sampling frequency
+        fc_hp, fc_lp : scalar
+            cutoff frequency for high/low-pass filter
         high_pass_order, low_pass_order: int
             high/low-pass filter order
+        gain: scalar
+            An additional multiplicative gain
         '''
         # nyquist_omega = pi * fs
         # high_pass_omega_c = 0.4 * nyquist_omega
@@ -51,6 +62,7 @@ class ScanDataFilter:
         self.fc_hp = fc_hp
         self.fc_lp = fc_lp
         self.fs = fs
+        self.gain = gain
         self.low_pass_order = low_pass_order
         self.high_pass_order = high_pass_order
 
@@ -60,7 +72,7 @@ class ScanDataFilter:
 
         zs = [0] * high_pass_order
         ps = []
-        ks = 1
+        ks = self.gain
         if high_pass_order > 0:
             omega_c_hp = 2 * pi * fc_hp
             ps += [-omega_c_hp] * high_pass_order
@@ -179,7 +191,7 @@ class WideScanNetwork(rf.Network):
         assert self.frequency.sweep_type == 'lin'
         return self.frequency.df[0]
 
-    def make_filter(self, lambda_hp=None, lambda_lp=None, high_pass_order=0, low_pass_order=0):
+    def make_filter(self, lambda_hp=None, lambda_lp=None, high_pass_order=0, low_pass_order=0, gain=1):
         pna_sampling_freq = 1 / self.freq_step
         return ScanDataFilter(
             fs=pna_sampling_freq,
@@ -187,6 +199,7 @@ class WideScanNetwork(rf.Network):
             fc_lp=(None if lambda_lp is None else 1/lambda_lp),
             high_pass_order=high_pass_order,
             low_pass_order=low_pass_order,
+            gain=gain,
         )
 
     def _subnetwork(self, center_ghz, span_ghz):
