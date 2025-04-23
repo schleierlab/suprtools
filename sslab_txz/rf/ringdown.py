@@ -909,6 +909,7 @@ class RingdownSetSweep:
             probe: Optional[Probe] = None,
             probe_z: Optional[float] = None,
             xerr: float = 0.020,
+            extrapolation_r: Optional[float] = None,
             **kwargs,
     ) -> dict[int, tuple[ErrorbarContainer, ...]]:
         if (probe is None) != (probe_z is None):
@@ -984,7 +985,11 @@ class RingdownSetSweep:
                     freq=frequency,
                 )
 
-                print(f'{q=}, beam_enlarge fudge: {fit.uvars['beam_enlarge_factor']:S}, probe_loss fudge: {fit.uvars['probe_loss_factor']:S}')
+                # print(
+                #     f'{q=}, '
+                #     f'beam_enlarge fudge: {fit.uvars['beam_enlarge_factor']:S}, '
+                #     f'probe_loss fudge: {fit.uvars['probe_loss_factor']:S}',
+                # )
 
                 r_space = 1e-3 * np.linspace(*expand_range(stage_pos, factor=1.1))
                 plot_kw = (
@@ -998,6 +1003,13 @@ class RingdownSetSweep:
                     np.exp(fit.eval(probe_r=r_space)),
                     **plot_kw,
                 )
+                if extrapolation_r is not None:
+                    extended_r_space = np.linspace(max(r_space), extrapolation_r)
+                    plot_ax.plot(
+                        1e+3 * extended_r_space,
+                        np.exp(fit.eval(probe_r=extended_r_space)),
+                        **(plot_kw | dict(linestyle='dashed')),
+                    )
 
         if ax_fin is None:
             plot_ax.set_yscale('log')
