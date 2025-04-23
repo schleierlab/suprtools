@@ -6,6 +6,7 @@ import matplotlib
 import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure, SubFigure
+from matplotlib.layout_engine import ConstrainedLayoutEngine
 from matplotlib.ticker import AutoMinorLocator
 from numpy.typing import ArrayLike
 
@@ -27,9 +28,30 @@ def make_grids(ax):
     ax.grid(which='minor', color='0.9')
 
 
-def set_reci_ax(ax):
+def remove_figure_padding(fig: Figure):
+    pad_inches = matplotlib.rcParams['axes.linewidth'] / 2 / 72
+    layout_engine = fig.get_layout_engine()
+    if layout_engine is None or not isinstance(layout_engine, ConstrainedLayoutEngine):
+        raise ValueError('Figure must be in constrained layout')
+    layout_engine.set(
+        w_pad=pad_inches,
+        h_pad=pad_inches,
+    )
+
+
+def savefig_tightly(fig: Figure, fname: str, **kwargs):
+    fig.savefig(
+        fname,
+        bbox_inches='tight',
+        pad_inches='layout',
+        **kwargs,
+    )
+
+
+def set_reci_ax(ax, invert: bool = False):
+    sign = -1 if invert else +1
     def reci(x):
-        return 1/(1e-15 + x)
+        return sign / (1e-15 + x)
     ax.set_xscale('function', functions=(reci, reci))
 
 
