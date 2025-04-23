@@ -260,7 +260,15 @@ def extract_radtan_elementnode_data(
             raise TypeError
 
 
-def radial_integral(re_tag, im_tag) -> float:
+def radial_integral(re_tag: int, im_tag: int) -> float:
+    '''
+    Give the volume integral of a complex vector field.
+
+    Parameters
+    ----------
+    re_tag, im_tag: int
+        Tags keying in to the real and imaginary parts of the vector field.
+    '''
     magnitude_field_scaled_tag = gmsh_matheval(
         '2 * pi * (v0^2 + v1^2 + v2^2 + w0^2 + w1^2 + w2^2) * x',
         view_tag=re_tag,
