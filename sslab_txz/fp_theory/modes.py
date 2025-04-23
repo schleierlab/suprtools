@@ -1,7 +1,7 @@
 import itertools
 import textwrap
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Literal, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -135,7 +135,14 @@ class ModeBasis(object):
             axes=([-1], [0]),
         )
 
-    def plot_field_intensity(self, vector, projection='polar', ax=None, **kwargs):
+    def plot_field_intensity(
+            self,
+            vector,
+            projection: Literal['rectilinear', 'polar'] = 'polar',
+            plot_range: float = 6,
+            ax=None,
+            **kwargs,
+    ):
         '''
         Plot the intensity of an arbitrary mode in the subspace spanned
         by the basis.
@@ -145,26 +152,32 @@ class ModeBasis(object):
         vector
             The vector specifying the desired mode in this basis.
         projection: {'rectilinear', 'polar'}
+        plot_range: float
+            Range to plot field over, in units of w/sqrt(2) (the natural
+            length scale of the equivalent quantum harmonic oscillator).
+            Must be positive.
         ax: Axes, optional
             An Axes to plot the mode intensity in. If not specified,
             a fresh Axes is created.
         kwargs
             Passed to matplotlib.Axes.pcolormesh
         '''
+        if plot_range <= 0:
+            raise ValueError
         if ax is None:
             fig, ax = plt.subplots(subplot_kw=dict(projection=projection))
 
         ax.set_aspect(1)
 
         if projection == 'rectilinear':
-            xs = np.linspace(-6, 6, 101)
-            ys = np.linspace(-6, 6, 101)
+            xs = np.linspace(-plot_range, plot_range, 101)
+            ys = np.linspace(-plot_range, plot_range, 101)
             xss, yss = np.meshgrid(xs, ys)
 
             rss, thetass = np.sqrt(xss**2 + yss**2), np.arctan2(yss, xss)
             avals, bvals = xss, yss
         elif projection == 'polar':
-            rs = np.linspace(0, 6, 101)
+            rs = np.linspace(0, plot_range, 101)
             thetas = np.linspace(0, 2*pi, 200, endpoint=False)
 
             rss, thetass = np.meshgrid(rs, thetas)
