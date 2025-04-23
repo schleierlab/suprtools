@@ -275,11 +275,14 @@ class SymmetricCavityGeometry(CavityGeometry):
         ]))
 
     def luk_near_confocal_modes(self, q_base, max_order=6):
+        '''
+        Does NOT include asphere correction.
+        '''
         even_modes = self._even_modes_list(max_order)
-        paraxial_freq_00 = self.fsr * (q_base + np.arccos(self.g) / pi)
+        paraxial_freq_00 = self.paraxial_frequency(q_base, n_total=0)
         k = 2 * pi * paraxial_freq_00 / c
 
-        return np.array([
+        arr = np.array([
             self.fsr * (
                 q_base
                 + 0.5
@@ -292,6 +295,8 @@ class SymmetricCavityGeometry(CavityGeometry):
             for (p, ell, s) in even_modes
             # if not (l == 0 and s == -1)
         ])
+
+        return np.moveaxis(arr, 0, -1)
 
     def resonance_frac(
             self,
