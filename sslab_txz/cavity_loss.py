@@ -15,7 +15,7 @@ from scipy.constants import c, elementary_charge, hbar, mu_0, pi
 from scipy.constants import k as k_B
 from uncertainties import unumpy as unp
 
-from sslab_txz.plotting import expand_range
+from sslab_txz.plotting import expand_range, set_reci_ax
 from sslab_txz.typing import ErrorbarKwargs, PlotKwargs
 
 phi_0 = scipy.constants.physical_constants['mag. flux quantum'][0]
@@ -483,6 +483,7 @@ class TemperatureFit[T: TypeIISuperconductor]:
             self,
             limit_finesse: Optional[float] = None,
             ax: Optional[Axes] = None,
+            scale: Literal['linear', 'reci', 'reci_r'] = 'linear',
             **kwargs: Unpack[PlotKwargs],
     ):
         """
@@ -493,9 +494,18 @@ class TemperatureFit[T: TypeIISuperconductor]:
         if ax is None:
             _, ax = plt.subplots()
 
+        if scale == 'linear':
+            pass
+        elif scale == 'reci':
+            set_reci_ax(ax, invert=False)
+        elif scale == 'reci_r':
+            set_reci_ax(ax, invert=True)
+        else:
+            assert_never(scale)
+
         finesse_limit = self.fit_result.beta[0] if limit_finesse is None else limit_finesse
 
-        plot_t_lims = self.plot_t_lims()
+        plot_t_lims = self.plot_t_lims(scale)
         plot_t_range = np.linspace(plot_t_lims[0], plot_t_lims[1], num=200)
         # not *plot_t_lims to satisfy mypy
 
@@ -505,8 +515,11 @@ class TemperatureFit[T: TypeIISuperconductor]:
             **kwargs,
         )
 
-    def plot_t_lims(self):
-        return expand_range(self.data.x)
+    def plot_t_lims(self, scale: Literal['linear', 'reci', 'reci_r'] = 'linear'):
+        if scale == 'linear':
+            return expand_range(self.data.x)
+        elif scale in ['reci', 'reci_r']:
+            return tuple(1/t for t in expand_range(1 / self.data.x))
 
     def superconductor(self) -> T:
         return self.material(residual_resistivity_ratio=self.fit_result.beta[1])
