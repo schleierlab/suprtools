@@ -70,6 +70,8 @@ def merge_curlgrad_fields(
         gradpath: StrPath,
         eps: float = 1e-12,
 ) -> tuple[tuple[int, int], tuple[int, int]]:
+    '''
+    '''
     # gmsh.clear()
     gmsh_tags_preopen = set(gmsh.view.get_tags())
     gmsh.open(str(curlpath))
@@ -82,10 +84,7 @@ def merge_curlgrad_fields(
     curl_tag, grad_tag = min(new_tags), max(new_tags)
 
     merge_exprs = ['v0', 'v1', f'-w0/(x + {eps})']
-
-    # curl_tag, grad_tag
-    # re_tag, im_tag
-    return (curl_tag, grad_tag), tuple([
+    re_tag, im_tag = (
         gmsh_matheval(
             merge_exprs,
             view_tag=curl_tag,
@@ -93,8 +92,10 @@ def merge_curlgrad_fields(
             other_view_tag=grad_tag,
             other_timestep=timestep,
         )
-        for timestep in [0, 1]
-    ])
+        for timestep in [0, 1]  # 0: real, 1: imag
+    )
+
+    return (curl_tag, grad_tag), (re_tag, im_tag)
 
 
 def parse_tensor_rank(ch):
@@ -171,6 +172,14 @@ def parse_gmsh_list_data(data_tuple):
 
 
 def gmsh_integrate(view_tag):
+    '''
+    Integrate a scalar field.
+
+    Parameters
+    ----------
+    view_tag: int
+        Tag to the view holding the scalar field.
+    '''
     view_idx = gmsh.view.get_index(view_tag)
     plugin_name = 'Integrate'
     set_plugin_options(
@@ -341,7 +350,7 @@ class CurlGradField:
         )
 
         # normalized E-field
-        self.e_field = self.e_field_raw / np.sqrt(self.volume_integral * symmetry_factor)
+        self.e_field = self.e_field_raw / np.sqrt(self.volume_integral)
 
     @cached_property
     def volume_integral(self) -> float:
