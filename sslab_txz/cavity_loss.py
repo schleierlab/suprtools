@@ -24,11 +24,21 @@ geom_factor_f = (pi / 4) * scipy.constants.value('characteristic impedance of va
 
 class TypeIISuperconductor(ABC):
     penetration_depth: float
+    '''The pure material penetration depth.'''
+
     coherence_length: float
+    '''The pure material coherence length.'''
+
     gap_temperature: float
     room_temperature_resistivity: float
     residual_resistivity_ratio: float
     carrier_density: float
+
+    transition_temperature: float
+    '''
+    Superconducting Tc. In principle could be deduced from BCS theory
+    and the superconducting gap.
+    '''
 
     def __init__(self, residual_resistivity_ratio: float):
         self.residual_resistivity_ratio = residual_resistivity_ratio
@@ -131,6 +141,8 @@ class TypeIISuperconductor(ABC):
             freq: ArrayLike,
             temp: ArrayLike,
             method: BCSMethod = 'numeric',
+            pure_lambda: bool = False,
+            warm_lambda: bool = True,
     ):
         '''
         BCS surface resistance of niobium at specified frequency and temperature.
@@ -156,6 +168,10 @@ class TypeIISuperconductor(ABC):
                     Gurevich eq. 18. Requires hbar omega / 2 k_B T << 1
                 - 'basic'
                     Gurevich eq. 2 with A = 8.9e+4 nOhm K / GHz^2
+        pure_lambda : bool
+            Whether to use the pure material penetration depth.
+        warm_lambda : bool
+            Whether to include the weak temperature dependence of the penetration depth.
 
         Returns
         -------
@@ -173,7 +189,15 @@ class TypeIISuperconductor(ABC):
         eta = hbar * omega / (k_B * self.gap_temperature)
         beta_dimless = self.gap_temperature / temp
 
-        lambda_impure = self.effective_penetration_depth
+        lambda_impure = (
+            self.penetration_depth
+            if pure_lambda else
+            self.effective_penetration_depth
+        ) / (
+            np.sqrt(1 - (temp / self.transition_temperature)**4)
+            if warm_lambda else
+            1
+        )
         if method == 'numeric':
             prefactor = 1/2 * mu_0**2 * lambda_impure**3 / self.cryo_rho_n
             return prefactor * omega**2 * self.bcs_conductivity_ratio(eta, beta_dimless)
@@ -332,6 +356,7 @@ class Niobium(TypeIISuperconductor):
     # gap_temperature: float = 17.67
     room_temperature_resistivity: float = 147e-9
     carrier_density = 5.56e+22 * 1e+6  # convert cm(-3) to m(-3)
+    transition_temperature = 9.2
 
     def __init__(
             self,
@@ -367,12 +392,16 @@ def cavity_finesse(
         limiting_finesse: float,
         superconductor: TypeIISuperconductor,
         bcs_fudge_factor: float = 1,
+        pure_lambda: bool = False,
+        warm_lambda: bool = False,
         method: TypeIISuperconductor.BCSMethod = 'numeric',
 ) -> float:
     surface_res = superconductor.bcs_surface_resistance(
         np.asarray(freq),
         np.asarray(temp),
         method,
+        pure_lambda=pure_lambda,
+        warm_lambda=warm_lambda,
     )
     limiting_surface_res = geom_factor_f / limiting_finesse
     return geom_factor_f / (surface_res * bcs_fudge_factor + limiting_surface_res)
@@ -384,6 +413,12 @@ class TemperatureFit[T: TypeIISuperconductor]:
     data: odr.RealData
     fit_result: odr.Output
     material: type[T]
+
+    pure_lambda: bool
+    '''Whether to assume the pure-material value of the penetration depth.'''
+
+    warm_lambda: bool
+    '''Whether to include the empirical temperature dependence of the penetration depth.'''
 
     @overload
     def __init__(
@@ -405,6 +440,8 @@ class TemperatureFit[T: TypeIISuperconductor]:
             mode_data,
             material=Niobium,
             method='numeric',
+            pure_lambda=False,
+            warm_lambda=False,
     ):
         self.mode_frequency = mode_data['freq'].mean()
         self.model = odr.Model(self._fitfunc)
@@ -416,6 +453,8 @@ class TemperatureFit[T: TypeIISuperconductor]:
         )
         self.material = material
         self.method = method
+        self.pure_lambda = pure_lambda
+        self.warm_lambda = warm_lambda
 
     def _fitfunc(self, params, temp):
         # limit_finesse, scale_fctr = params
@@ -428,6 +467,8 @@ class TemperatureFit[T: TypeIISuperconductor]:
                 residual_resistivity_ratio=rrr,
                 # gap_temperature=gap_temp,
             ),
+            pure_lambda=self.pure_lambda,
+            warm_lambda=self.warm_lambda,
             method=self.method,
         )
 
