@@ -994,7 +994,7 @@ class RingdownSetSweep:
                 r_space = 1e-3 * np.linspace(*expand_range(stage_pos, factor=1.1))
                 plot_kw = (
                     self.kwarg_func(frequency, q, +1)
-                    | dict(alpha=1, marker=None)
+                    | dict(alpha=0.7, marker=None)
                     | kwargs
                     | dict(linestyle='solid', label=None)
                 )
