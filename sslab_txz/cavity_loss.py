@@ -9,7 +9,7 @@ import scipy.integrate
 import uncertainties
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
 from scipy import odr
 from scipy.constants import c, elementary_charge, hbar, mu_0, pi
 from scipy.constants import k as k_B
@@ -40,8 +40,33 @@ class TypeIISuperconductor(ABC):
     and the superconducting gap.
     '''
 
-    def __init__(self, residual_resistivity_ratio: float):
+    lambda_temperature_dependence: bool
+    '''
+    Whether to include the 1 / sqrt(1 - (T/Tc)**4) empirical temperature dependence
+    of the penetration depth in computations.
+    '''
+
+    lambda_purity_dependence: bool
+    '''
+    Whether to de-rate the penetration depth in computations given a finite mean-free-path
+    '''
+
+    xi_purity_dependence: bool
+    '''Whether to de-rate the coherence length in computations given finite mean-free-path.'''
+
+    def __init__(
+            self,
+            residual_resistivity_ratio: float,
+            # can consider rolling these into one config object
+            warm_lambda: bool = True,
+            impure_lambda: bool = True,
+            impure_xi: bool = True,
+    ):
         self.residual_resistivity_ratio = residual_resistivity_ratio
+
+        self.lambda_temperature_dependence = warm_lambda
+        self.lambda_purity_dependence = impure_lambda
+        self.xi_purity_dependence = impure_xi
 
     @property
     def rrr(self):
@@ -111,11 +136,31 @@ class TypeIISuperconductor(ABC):
 
         return 2/eta * integral
 
-    def effective_penetration_depth(self, temperature: ArrayLike = 0, impure: bool = True):
+    def effective_penetration_depth(
+            self,
+            temperature: ArrayLike = 0,
+    ) -> NDArray:
+        R'''
+        Compute the penetration depth \lambda.
+
+        Parameters
+        ----------
+        temperature: array_like, optional
+            If supplied, the temperature at which to evaluate the penetration depth.
+            Only has nontrivial effect if self.lambda_temperature_dependence is True,
+            or if temperature is nonzero.
+
+        Returns
+        -------
+        NDArray
+            Penetration depth, adjusted for material purity if
+            `self.lambda_purity_dependence` is True, and for the temperature,
+            if supplied and `self.lambda_temperature_dependence` is True.
+        '''
         # see Gurevich (2017)
 
         purity_factor = 1
-        if impure:
+        if self.lambda_purity_dependence:
             # this is correct; we compare with the -pure- coherence length,
             # not the one shortened by mean free path
             purity_a = pi * self.coherence_length / (2 * np.asarray(self.mean_free_path))
@@ -128,12 +173,17 @@ class TypeIISuperconductor(ABC):
             purity_factor = np.sqrt(purity_a / (pi/2 - numerator / denominator))
 
         temperature = np.asarray(temperature)
-        temperature_factor = (1 - (temperature / self.transition_temperature)**4) ** (-1/2)
+        temperature_factor = np.ones_like(temperature)
+        if self.lambda_temperature_dependence:
+            temperature_factor = (1 - (temperature / self.transition_temperature)**4) ** (-1/2)
 
         return self.penetration_depth * purity_factor * temperature_factor
 
     @property
     def effective_coherence_length(self):
+        if not self.xi_purity_dependence:
+            return self.coherence_length
+
         return 1 / (1 / self.coherence_length + 1 / self.mean_free_path)
 
     @property
@@ -145,6 +195,10 @@ class TypeIISuperconductor(ABC):
 
     @property
     def mean_free_path(self):
+        '''
+        Compute the mean free path from the normal-state resistivity
+        using the Drude formula.
+        '''
         return (
             hbar * (3 * pi**2 * self.carrier_density)**(1/3)
             / (self.carrier_density * elementary_charge**2 * self.cryo_normalstate_resistivity)
@@ -155,8 +209,6 @@ class TypeIISuperconductor(ABC):
             freq: ArrayLike,
             temp: ArrayLike,
             method: BCSMethod = 'numeric',
-            pure_lambda: bool = False,
-            warm_lambda: bool = True,
     ):
         '''
         BCS surface resistance of niobium at specified frequency and temperature.
@@ -182,10 +234,6 @@ class TypeIISuperconductor(ABC):
                     Gurevich eq. 18. Requires hbar omega / 2 k_B T << 1
                 - 'basic'
                     Gurevich eq. 2 with A = 8.9e+4 nOhm K / GHz^2
-        pure_lambda : bool
-            Whether to use the pure material penetration depth.
-        warm_lambda : bool
-            Whether to include the weak temperature dependence of the penetration depth.
 
         Returns
         -------
@@ -203,10 +251,7 @@ class TypeIISuperconductor(ABC):
         eta = hbar * omega / (k_B * self.gap_temperature)
         beta_dimless = self.gap_temperature / temp
 
-        lambda_impure = self.effective_penetration_depth(
-            temperature=(temp if warm_lambda else 0),
-            impure=(not pure_lambda),
-        )
+        lambda_impure = self.effective_penetration_depth(temp)
 
         if method == 'numeric':
             prefactor = 1/2 * mu_0**2 * lambda_impure**3 / self.cryo_rho_n
@@ -234,18 +279,17 @@ class TypeIISuperconductor(ABC):
         else:
             raise ValueError
 
-    def trapped_vortex_resistance_per_field_highfreqlim(self, temperature: float, impure: bool):
+    def trapped_vortex_resistance_per_field_highfreqlim(self, temperature: float):
         '''
         '''
         eta = phi_0 * self.upper_critical_field / self.cryo_rho_n
 
-        return phi_0 / (2 * eta * self.effective_penetration_depth(temperature, impure))
+        return phi_0 / (2 * eta * self.effective_penetration_depth(temperature))
 
     def trapped_vortex_resistance_per_field(
             self,
             freq,
             segment_length: ArrayLike,
-            pure_lambda: bool,
             temperature: float = 0,
             method: Literal['exact', 'eq32', 'eq33'] = 'exact',
     ):
@@ -287,14 +331,10 @@ class TypeIISuperconductor(ABC):
         '''
         segment_length = np.asarray(segment_length)
 
-        impure = not pure_lambda
         omega = 2 * pi * freq
-        lambda_impure = self.effective_penetration_depth(
-            temperature,
-            impure,
-        )
+        lambda_impure = self.effective_penetration_depth(temperature)
 
-        line_tension_epsilon = phi_0**2 * self.g(temperature, impure) / (4 * pi * mu_0 * lambda_impure**2)
+        line_tension_epsilon = phi_0**2 * self.g(temperature) / (4 * pi * mu_0 * lambda_impure**2)
 
         eta = phi_0 * self.upper_critical_field / self.cryo_rho_n
 
@@ -303,10 +343,7 @@ class TypeIISuperconductor(ABC):
         root_2_nu = np.sqrt(2 * nu)
         alpha = lambda_impure / segment_length
 
-        high_freq_lim_value = self.trapped_vortex_resistance_per_field_highfreqlim(
-            temperature,
-            impure,
-        )
+        high_freq_lim_value = self.trapped_vortex_resistance_per_field_highfreqlim(temperature)
 
         if method == 'exact':
             numerical_factor = chi**2 * (
@@ -321,7 +358,7 @@ class TypeIISuperconductor(ABC):
             numerical_factor = numerator / denominator
         elif method == 'eq33':
             b_critical = phi_0 / (2**1.5 * pi * lambda_impure * self.effective_coherence_length)
-            return np.sqrt(mu_0 * self.cryo_normalstate_resistivity * omega / (2 * self.g(temperature, impure))) / b_critical
+            return np.sqrt(mu_0 * self.cryo_normalstate_resistivity * omega / (2 * self.g(temperature))) / b_critical
         elif method == 'modified_lowfreq':
             numerical_factor = 2 * nu**2 * alpha**4 * (
                 5/2
@@ -336,20 +373,20 @@ class TypeIISuperconductor(ABC):
 
         return high_freq_lim_value * numerical_factor
 
-    def kappa(self, temperature: float, impure: bool):
-        return self.effective_penetration_depth(temperature, impure) / self.effective_coherence_length
+    def kappa(self, temperature: ArrayLike):
+        return self.effective_penetration_depth(temperature) / self.effective_coherence_length
 
-    def g(self, temperature, impure):
-        return np.log(self.kappa(temperature, impure)) + 0.5
+    def g(self, temperature: ArrayLike):
+        return np.log(self.kappa(temperature)) + 0.5
 
-    def trapped_vortex_char_freq_lambda(self, temperature: float, impure: bool):
+    def trapped_vortex_char_freq_lambda(self, temperature: ArrayLike):
         R'''
         Characteristic frequency \omega_\lambda / 2\pi (Gurevich eq. 29)
         '''
         return (
-            self.g(temperature, impure)
+            self.g(temperature)
             * self.cryo_normalstate_resistivity * self.effective_coherence_length**2
-            / (2 * mu_0 * self.effective_penetration_depth(temperature, impure)**4)
+            / (2 * mu_0 * self.effective_penetration_depth(temperature)**4)
             / (2 * pi)
         )
 
@@ -365,7 +402,7 @@ class TypeIISuperconductor(ABC):
         return (
             self.g(temperature, impure)
             * self.cryo_normalstate_resistivity * self.effective_coherence_length**2
-            / (2 * mu_0 * self.effective_penetration_depth(temperature, impure)**2 * segment_length**2)
+            / (2 * mu_0 * self.effective_penetration_depth(temperature)**2 * segment_length**2)
             / (2 * pi)
         )
 
@@ -381,21 +418,41 @@ class Niobium(TypeIISuperconductor):
 
     def __init__(
             self,
-            residual_resistivity_ratio,
-            gap_temperature=17.67,
+            residual_resistivity_ratio: float,
+            gap_temperature: float = 17.67,
+            warm_lambda: bool = True,
+            impure_lambda: bool = True,
+            impure_xi: bool = True,
     ):
-        self.residual_resistivity_ratio = residual_resistivity_ratio
         self.gap_temperature = gap_temperature
+        super().__init__(
+            residual_resistivity_ratio,
+            warm_lambda,
+            impure_lambda,
+            impure_xi,
+        )
 
     @classmethod
     def from_rrr(cls, rrr):
         return cls(residual_resistivity_ratio=rrr)
 
     @classmethod
-    def from_mean_free_path(cls, mean_free_path: float):
+    def from_mean_free_path(
+        cls,
+        mean_free_path: float,
+        # can be made optional, mandatory for easier debugging
+        warm_lambda: bool,
+        impure_lambda: bool,
+        impure_xi: bool,
+    ):
         cryo_resistivity = cls.fermi_momentum() /  (cls.carrier_density * elementary_charge**2 * mean_free_path)
         rrr = cls.room_temperature_resistivity / cryo_resistivity
-        return cls(residual_resistivity_ratio=rrr)
+        return cls(
+            residual_resistivity_ratio=rrr,
+            warm_lambda=warm_lambda,
+            impure_lambda=impure_lambda,
+            impure_xi=impure_xi,
+        )
 
 
 def roughness_limit_finesse(
@@ -413,16 +470,12 @@ def cavity_finesse(
         limiting_finesse: float,
         superconductor: TypeIISuperconductor,
         bcs_fudge_factor: float = 1,
-        pure_lambda: bool = False,
-        warm_lambda: bool = False,
         method: TypeIISuperconductor.BCSMethod = 'numeric',
 ) -> float:
     surface_res = superconductor.bcs_surface_resistance(
-        np.asarray(freq),
-        np.asarray(temp),
+        freq,
+        temp,
         method,
-        pure_lambda=pure_lambda,
-        warm_lambda=warm_lambda,
     )
     limiting_surface_res = geom_factor_f / limiting_finesse
     return geom_factor_f / (surface_res * bcs_fudge_factor + limiting_surface_res)
@@ -435,11 +488,14 @@ class TemperatureFit[T: TypeIISuperconductor]:
     fit_result: odr.Output
     material: type[T]
 
-    pure_lambda: bool
-    '''Whether to assume the pure-material value of the penetration depth.'''
+    impure_lambda: bool
+    '''Whether to use the purity-dependence of the penetration depth in computations.'''
 
     warm_lambda: bool
     '''Whether to include the empirical temperature dependence of the penetration depth.'''
+
+    impure_xi: bool
+    '''Whether to use the purity-dependence of coherence length in computations.'''
 
     @overload
     def __init__(
@@ -461,8 +517,9 @@ class TemperatureFit[T: TypeIISuperconductor]:
             mode_data,
             material=Niobium,
             method='numeric',
-            pure_lambda=False,
-            warm_lambda=False,
+            impure_lambda=True,
+            warm_lambda=True,
+            impure_xi=True,
     ):
         self.mode_frequency = mode_data['freq'].mean()
         self.model = odr.Model(self._fitfunc)
@@ -474,8 +531,9 @@ class TemperatureFit[T: TypeIISuperconductor]:
         )
         self.material = material
         self.method = method
-        self.pure_lambda = pure_lambda
+        self.impure_lambda = impure_lambda
         self.warm_lambda = warm_lambda
+        self.impure_xi = impure_xi
 
     def _fitfunc(self, params, temp):
         # limit_finesse, scale_fctr = params
@@ -486,10 +544,10 @@ class TemperatureFit[T: TypeIISuperconductor]:
             limit_finesse,
             self.material(
                 residual_resistivity_ratio=rrr,
-                # gap_temperature=gap_temp,
+                warm_lambda=self.warm_lambda,
+                impure_lambda=self.impure_lambda,
+                impure_xi=self.impure_xi,
             ),
-            pure_lambda=self.pure_lambda,
-            warm_lambda=self.warm_lambda,
             method=self.method,
         )
 
@@ -584,4 +642,9 @@ class TemperatureFit[T: TypeIISuperconductor]:
             return tuple(1/t for t in expand_range(1 / self.data.x))
 
     def superconductor(self) -> T:
-        return self.material(residual_resistivity_ratio=self.fit_result.beta[1])
+        return self.material(
+            residual_resistivity_ratio=self.fit_result.beta[1],
+            warm_lambda=self.warm_lambda,
+            impure_lambda=self.impure_lambda,
+            impure_xi=self.impure_xi,
+        )
