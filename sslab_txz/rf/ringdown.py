@@ -991,7 +991,14 @@ class RingdownSetSweep:
                 #     f'probe_loss fudge: {fit.uvars['probe_loss_factor']:S}',
                 # )
 
-                r_space = 1e-3 * np.linspace(*expand_range(stage_pos, factor=1.1))
+                native_lolim, native_hilim = expand_range(stage_pos, factor=1.1)
+                if extrapolation_r is not None:
+                    hilim = max(
+                        float(native_hilim),  # to satisfy mypy
+                        extrapolation_r * 1e+3,
+                    )
+
+                r_space = 1e-3 * np.linspace(native_lolim, hilim)
                 plot_kw = (
                     self.kwarg_func(frequency, q, +1)
                     | dict(alpha=0.7, marker=None)
@@ -1003,13 +1010,6 @@ class RingdownSetSweep:
                     np.exp(fit.eval(probe_r=r_space)),
                     **plot_kw,
                 )
-                if extrapolation_r is not None:
-                    extended_r_space = np.linspace(max(r_space), extrapolation_r)
-                    plot_ax.plot(
-                        1e+3 * extended_r_space,
-                        np.exp(fit.eval(probe_r=extended_r_space)),
-                        **(plot_kw | dict(linestyle='dashed')),
-                    )
 
         if ax_fin is None:
             plot_ax.set_yscale('log')
