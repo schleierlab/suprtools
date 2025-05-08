@@ -267,6 +267,7 @@ class WideScanNetwork(rf.Network):
             sexy: bool = True,
             fig: Optional[Figure] = None,
             axs: Optional[NDArray] = None,
+            figwidth: float = 12,
             **kwargs: Unpack[PlotKwargs],
     ):
         if not isinstance(downsample, int):
@@ -287,7 +288,7 @@ class WideScanNetwork(rf.Network):
 
         if fig is None and axs is None:
             fig, axs = plt.subplots(
-                figsize=(12, 1.2*nrows),
+                figsize=(figwidth, 1.2*nrows * figwidth / 12),
                 nrows=nrows,
                 gridspec_kw=dict(height_ratios=hratios),
                 sharex='col',
@@ -348,6 +349,13 @@ class WideScanNetwork(rf.Network):
 
             for ax_db, ax_filt, offset in zip(unfiltered_axs, filtered_axs, offsets):
                 ax_db.set_ylabel(f'$|S_{{21}}|$ (dB)\n[+${offset}\\times$ FSR]')
+                # if not canvas_provided:
+                #     label_artist(
+                #         fR'$+{offset}\times\text{{FSR}}$',
+                #         ax_db,
+                #         color='0.5',
+                #         fontsize='small',
+                #     )
                 ax_filt.set_ylabel("filtered\n(linear)")
 
         if geo is not None:
