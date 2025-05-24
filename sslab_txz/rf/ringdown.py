@@ -477,7 +477,7 @@ class Ringdown(RingdownSet):
         axs['deg'].legend(fontsize='x-small')
         axs['reim'].legend(fontsize='x-small')
 
-        axs['deg'].set_xlabel(R'Time ($\mu$s)')
+        axs['deg'].set_xlabel(fR'Time ({Units.US.mplstr()})')
         axs['reim'].set_xlabel(fR'${reim_scale_latex} \times \operatorname{{Re}} S_{{21}}$')
         axs['reim'].set_ylabel(fR'${reim_scale_latex} \times \operatorname{{Im}} S_{{21}}$')
 
@@ -1091,7 +1091,6 @@ class RingdownSetSweep:
             vac_field = self.geometry.waist_vacuum_field_fromfreq(freq)
             vacuum_rabi_freq = 2 * d * vac_field / scipy.constants.Planck / (1 if series.polarization == 0 else np.sqrt(2))
 
-            # 2g, in 2pi Hz
             ugammas = 1 / (2 * pi * power_laws['lifetime'](freq))
 
             ukappas: NDArray
@@ -1153,7 +1152,7 @@ class RingdownSetSweep:
                         color='0.5',
                         horizontalalignment='center',
                         verticalalignment='baseline',
-                        fontsize='x-small',
+                        fontsize='small',
                     )
 
         if ax is None:
