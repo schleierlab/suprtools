@@ -286,3 +286,7 @@ def annotate_line(
         transform_rotates_text=True,
         **kwargs,
     )
+
+
+def mpl_usetex() -> bool:
+    return matplotlib.rcParams['text.usetex']
