@@ -1,6 +1,7 @@
 from typing import Any, Literal, Optional, TypedDict
 
 from matplotlib.colors import Colormap, Normalize
+from matplotlib.transforms import Transform
 from matplotlib.typing import ColorType, LineStyleType
 
 PolarizationSpec = Literal[+1, -1]
@@ -54,6 +55,9 @@ FontSizeSpec = Literal['xx-small', 'x-small', 'small', 'medium', 'large', 'x-lar
 
 class TextKwargs(TypedDict, total=False):
     fontsize: float | FontSizeSpec
+    transform: Transform
+    horizontalalignment: Literal['left', 'center', 'right']
+    verticalalignment: Literal['top', 'center_baseline', 'center', 'baseline', 'bottom']
 
 
 class AnnotateKwargs(TextKwargs, total=False):

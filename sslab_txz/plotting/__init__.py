@@ -10,7 +10,7 @@ from matplotlib.layout_engine import ConstrainedLayoutEngine
 from matplotlib.ticker import AutoMinorLocator
 from numpy.typing import ArrayLike
 
-from sslab_txz.typing import AnnotateKwargs
+from sslab_txz.typing import AnnotateKwargs, TextKwargs
 
 from ._angleannotation import AngleAnnotation as AngleAnnotation
 from .style import annotation_arrowprops_default
@@ -110,7 +110,7 @@ def latex_frexp10(x):
 # TODO use AnchoredText instead of ax.text?
 def label_subplots(
         fig: Figure,
-        artists: Sequence[Axes] | Sequence[SubFigure],
+        artists: Sequence[Axes | SubFigure],
         label_fmt='(alph)',
         adjust=(5, -5),
         colors=None,
@@ -125,9 +125,6 @@ def label_subplots(
         colors = ['black'] * len(artists)
 
     for i, artist in enumerate(artists):
-        # label physical distance in and down:
-        adjust_x, adjust_y = adjust
-        trans = matplotlib.transforms.ScaledTranslation(adjust_x/72, adjust_y/72, fig.dpi_scale_trans)
         # label = f'({chr(97 + i)})'
 
         def numsubber(m: re.Match[str]) -> str:
@@ -153,29 +150,47 @@ def label_subplots(
             label_fmt,
         )
 
-        artist = cast(Axes | SubFigure, artist)
-        match artist:
-            case Axes() as ax:
-                transform = ax.transAxes
-                text = ax.text
-            case SubFigure() as subfig:
-                transform = subfig.transSubfigure
-                text = subfig.text
-            case _:
-                assert_never()
-
-        text_kws_default = dict(
-            transform=(transform + trans),
-            fontsize='large',
-            verticalalignment='top',
+        kwargs = dict(
             color=colors[i],
+            **text_kws.get(i, dict()),
         )
-        text(
-            0.0, 1.0,
-            label,
-            **(text_kws_default | text_kws.get(i, dict())),
-            # fontfamily='serif',
-        )
+        artist = cast(Axes | SubFigure, artist)
+        label_artist(label, artist, adjust, **kwargs)
+
+
+def label_artist(
+        label: str,
+        artist: Axes | SubFigure,
+        adjust=(5, -5),
+        **kwargs: Unpack[TextKwargs],
+):
+    # label physical distance in and down:
+    fig = artist.get_figure()
+    if fig is None:
+        raise ValueError
+
+    adjust_x, adjust_y = adjust
+    trans = matplotlib.transforms.ScaledTranslation(adjust_x/72, adjust_y/72, fig.dpi_scale_trans)
+
+    match artist:
+        case Axes() as ax:
+            transform = ax.transAxes
+        case SubFigure() as subfig:
+            transform = subfig.transSubfigure
+        case _:
+            assert_never()
+
+    text_kws_default = TextKwargs(
+        transform=(transform + trans),
+        fontsize='large',
+        verticalalignment='top',
+    )
+
+    artist.text(
+        0.0, 1.0,
+        label,
+        **(text_kws_default | kwargs),
+    )
 
 
 def watermark(ax: Axes, text: str, **kwargs):
