@@ -93,7 +93,7 @@ class RydbergTransitionSeries(ABC):
 
         return {
             'd': self.fit_power_law(freqs, np.abs(self.dipole_matrix_elements())),
-            'lifetime': self.fit_power_law(freqs, self.final_state_lifetimes()),
+            'lifetime': self.fit_power_law(freqs, self.init_state_lifetimes()),
         }
 
     def plot_numbers(self, ax_d, ax_lifetime, **kwargs):
