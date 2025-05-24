@@ -23,7 +23,8 @@ from uncertainties import ufloat, unumpy
 
 from sslab_txz.fp_theory.coupling_config import CouplingConfig
 from sslab_txz.fp_theory.geometry._symmetric import SymmetricCavityGeometry
-from sslab_txz.plotting import sslab_style
+from sslab_txz.plotting import mpl_usetex, sslab_style
+from sslab_txz.plotting.units import Units
 from sslab_txz.rf.errors import FitFailureError
 from sslab_txz.typing import PlotKwargs
 
@@ -294,7 +295,7 @@ class WideScanNetwork(rf.Network):
                 sharex='col',
                 constrained_layout=True,
             )
-            fig.supxlabel('Frequency (GHz)')
+            fig.supxlabel(f'Frequency ({Units.GHZ.mplstr()})')
             if sexy:
                 for ax in axs:
                     sslab_style(ax)
@@ -312,10 +313,15 @@ class WideScanNetwork(rf.Network):
             offset_center_freq_ghz = center_freq_ghz + offset * fsr_guess_ghz
 
             subnet = self._subnetwork(offset_center_freq_ghz, span_ghz)
+
+            if mpl_usetex():
+                label = fr'${offset:+d}\times \SI{{{fsr_guess_ghz}}}{{\GHz}}$'
+            else:
+                label = fr'${offset:+d}\times {fsr_guess_ghz}$ GHz'
             ax.plot(
                 subnet.f[downsampling_slice] / 1e9 - fsr_guess_ghz * offset,
                 rf.complex_2_db(subnet.s.flatten()[downsampling_slice] * scale),
-                label=fr'${offset:+d}\times {fsr_guess_ghz}$ GHz',
+                label=label,
                 **(plot_kw_default | kwargs),
             )
 
