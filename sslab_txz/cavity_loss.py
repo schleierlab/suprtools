@@ -16,6 +16,7 @@ from scipy.constants import k as k_B
 from uncertainties import unumpy as unp
 
 from sslab_txz.plotting import expand_range, set_reci_ax
+from sslab_txz.plotting.units import Units
 from sslab_txz.typing import ErrorbarKwargs, PlotKwargs
 
 phi_0 = scipy.constants.physical_constants['mag. flux quantum'][0]
@@ -57,12 +58,14 @@ class TypeIISuperconductor(ABC):
     def __init__(
             self,
             residual_resistivity_ratio: float,
+            penetration_depth: float,
             # can consider rolling these into one config object
             warm_lambda: bool = True,
             impure_lambda: bool = True,
             impure_xi: bool = True,
     ):
         self.residual_resistivity_ratio = residual_resistivity_ratio
+        self.penetration_depth = penetration_depth
 
         self.lambda_temperature_dependence = warm_lambda
         self.lambda_purity_dependence = impure_lambda
@@ -409,7 +412,8 @@ class TypeIISuperconductor(ABC):
 
 
 class Niobium(TypeIISuperconductor):
-    penetration_depth: float = 36e-9
+    # penetration_depth: float = 36e-9
+    # penetration_depth: float = 40e-9  # affects RRR inference as lambda^3
     coherence_length: float = 40e-9
     # gap_temperature: float = 17.67
     room_temperature_resistivity: float = 147e-9
@@ -419,12 +423,14 @@ class Niobium(TypeIISuperconductor):
     def __init__(
             self,
             residual_resistivity_ratio: float,
+            penetration_depth: float = 40e-9,
             gap_temperature: float = 17.67,
             warm_lambda: bool = True,
             impure_lambda: bool = True,
             impure_xi: bool = True,
     ):
         self.gap_temperature = gap_temperature
+        self.penetration_depth = penetration_depth
         super().__init__(
             residual_resistivity_ratio,
             warm_lambda,
@@ -501,22 +507,23 @@ class TemperatureFit[T: TypeIISuperconductor]:
     def __init__(
             self: TemperatureFit[Niobium],
             mode_data,
+            rrr: float,
             material: type[Niobium] = ...,
-            method: TypeIISuperconductor.BCSMethod = ...,
     ): ...
     @overload
     def __init__(
         self: TemperatureFit[T],
         mode_data,
+        rrr: float,
         material: type[T],
-        method: TypeIISuperconductor.BCSMethod = ...,
     ): ...
 
     def __init__(
             self,
             mode_data,
+            rrr: float,
             material=Niobium,
-            method='numeric',
+            method: Literal['basic', 'basic_gap', 'numeric'] = 'numeric',
             impure_lambda=True,
             warm_lambda=True,
             impure_xi=True,
@@ -534,16 +541,50 @@ class TemperatureFit[T: TypeIISuperconductor]:
         self.impure_lambda = impure_lambda
         self.warm_lambda = warm_lambda
         self.impure_xi = impure_xi
+        self.rrr = rrr
 
     def _fitfunc(self, params, temp):
         # limit_finesse, scale_fctr = params
-        limit_finesse, rrr = params
+        if self.method == 'basic':
+            limit_finesse, fudge = params
+            return cavity_finesse(
+                self.mode_frequency,
+                temp,
+                limit_finesse,
+                self.material(
+                    residual_resistivity_ratio=60,  # not used for method='basic'
+                    warm_lambda=self.warm_lambda,
+                    impure_lambda=self.impure_lambda,
+                    impure_xi=self.impure_xi,
+                ),
+                bcs_fudge_factor=fudge,
+                method='basic',
+            )
+        elif self.method == 'basic_gap':
+            limit_finesse, fudge, gap = params
+            return cavity_finesse(
+                self.mode_frequency,
+                temp,
+                limit_finesse,
+                self.material(
+                    gap_temperature=gap,
+                    residual_resistivity_ratio=60,  # not used for method='basic'
+                    warm_lambda=self.warm_lambda,
+                    impure_lambda=self.impure_lambda,
+                    impure_xi=self.impure_xi,
+                ),
+                bcs_fudge_factor=fudge,
+                method='basic',
+            )
+
+        limit_finesse, penetration_depth = params
         return cavity_finesse(
             self.mode_frequency,
             temp,
             limit_finesse,
             self.material(
-                residual_resistivity_ratio=rrr,
+                residual_resistivity_ratio=self.rrr,
+                penetration_depth=penetration_depth,
                 warm_lambda=self.warm_lambda,
                 impure_lambda=self.impure_lambda,
                 impure_xi=self.impure_xi,
@@ -551,32 +592,33 @@ class TemperatureFit[T: TypeIISuperconductor]:
             method=self.method,
         )
 
-    def fit(self, finesse_0=6e+7, rrr_0=300):
-        self.odr = odr.ODR(self.data, self.model, beta0=[finesse_0, rrr_0])
+    def fit(self, *args):
+        self.odr = odr.ODR(self.data, self.model, beta0=args)
         self.fit_result = self.odr.run()
         self.upopt = uncertainties.correlated_values(self.fit_result.beta, self.fit_result.cov_beta)
 
     def plot(
             self,
             plot_limit_finesse: bool = False,
+            plot_fit: bool = True,
+            plot_data: bool = True,
             ax: Optional[Axes] = None,
-            **errorbar_kw: Unpack[ErrorbarKwargs],
+            **errorbar_kw: Unpack[PlotKwargs],
     ):
         if ax is None:
             _, ax = plt.subplots()
 
-        errorbar_kw_default = ErrorbarKwargs(
-            linestyle='None',
+        errorbar_kw_default = PlotKwargs(
             # markersize=1,
             color='C0',
         )
-        ax.errorbar(
-            self.data.x,
-            self.data.y,
-            yerr=self.data.sy,
-            xerr=self.data.sx,
-            **(errorbar_kw_default | errorbar_kw),
-        )
+
+        if plot_data:
+            errorbar_kw_total = errorbar_kw_default | errorbar_kw | dict(linestyle='None')
+            self.plot_data(
+                ax=ax,
+                **errorbar_kw_total,
+            )
 
         if plot_limit_finesse:
             fit_limit_finesse = self.upopt[0]
@@ -594,10 +636,27 @@ class TemperatureFit[T: TypeIISuperconductor]:
                 ha='right',
                 va='top',
             )
+        if plot_fit:
+            plot_kw = errorbar_kw_default | errorbar_kw | PlotKwargs(marker=None)
+            self.plot_fit(ax=ax, **plot_kw)
 
-        self.plot_fit(ax=ax, color=(errorbar_kw['color'] or 'C0'))
+        ax.set_xlabel(f'Temperature ({Units.K.mplstr()})')
 
-        ax.set_xlabel('Temperature (K)')
+    def plot_data(
+            self,
+            ax: Optional[Axes] = None,
+            **kwargs: Unpack[ErrorbarKwargs],
+    ):
+        if ax is None:
+            _, ax = plt.subplots()
+
+        ax.errorbar(
+            self.data.x,
+            self.data.y,
+            yerr=self.data.sy,
+            xerr=self.data.sx,
+            **kwargs,
+        )
 
     def plot_fit(
             self,
@@ -631,7 +690,7 @@ class TemperatureFit[T: TypeIISuperconductor]:
 
         ax.plot(
             plot_t_range,
-            self._fitfunc([finesse_limit, self.fit_result.beta[1]], plot_t_range),
+            self._fitfunc([finesse_limit, *self.fit_result.beta[1:]], plot_t_range),
             **kwargs,
         )
 
@@ -642,8 +701,12 @@ class TemperatureFit[T: TypeIISuperconductor]:
             return tuple(1/t for t in expand_range(1 / self.data.x))
 
     def superconductor(self) -> T:
+        if self.method != 'numeric':
+            raise ValueError
+
         return self.material(
-            residual_resistivity_ratio=self.fit_result.beta[1],
+            residual_resistivity_ratio=self.rrr,
+            penetration_depth=self.fit_result.beta[1],
             warm_lambda=self.warm_lambda,
             impure_lambda=self.impure_lambda,
             impure_xi=self.impure_xi,

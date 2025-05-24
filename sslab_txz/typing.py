@@ -1,6 +1,8 @@
 from typing import Any, Literal, Optional, TypedDict
 
 from matplotlib.colors import Colormap, Normalize
+from matplotlib.markers import MarkerStyle
+from matplotlib.path import Path
 from matplotlib.transforms import Transform
 from matplotlib.typing import ColorType, LineStyleType
 
@@ -16,6 +18,7 @@ class PlotKwargs(TypedDict, total=False):
     label: Any  # anything that can be str()'d
     linestyle: LineStyleType
     linewidth: float
+    marker: None | str | Path | MarkerStyle
     rasterized: bool
 
 
