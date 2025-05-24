@@ -611,9 +611,9 @@ class RingdownCollectiveFit:
             np.mean(np.abs(self.ringdown_set.s21 - offset)**2, axis=0)[mask]
         fit_values = uvars['const'].n \
             + uvars['a0'].n * np.exp(-2 * pi * uvars['fwhm'].n * masked_time)
-        norm_factor = fit_values[0] if normalized else 1
 
         maybe_noise_offset = uvars['const'].n if noise_removed else 0
+        norm_factor = (fit_values[0] - maybe_noise_offset) if normalized else 1
 
         ax.plot(
             xscale * masked_time,
