@@ -8,7 +8,16 @@ from __future__ import annotations
 import importlib.resources
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Callable, Literal, Optional, assert_never, cast, overload
+from typing import (
+    Any,
+    Callable,
+    Literal,
+    Optional,
+    Unpack,
+    assert_never,
+    cast,
+    overload,
+)
 
 import arc
 import lmfit
@@ -36,11 +45,12 @@ from sslab_txz._typing import StrPath
 from sslab_txz.fp_theory.geometry._symmetric import SymmetricCavityGeometry
 from sslab_txz.plotting import expand_range, sslab_style
 from sslab_txz.plotting.style import kwarg_func_factory
+from sslab_txz.plotting.units import Units
 from sslab_txz.rf.couplers import Probe
 from sslab_txz.rf.cw import CWMeasurement
 from sslab_txz.rf.errors import FitFailureError
 from sslab_txz.rydberg import RydbergTransitionSeries
-from sslab_txz.typing import ErrorbarKwargs, ModeSpec
+from sslab_txz.typing import ErrorbarKwargs, ModeSpec, PlotKwargs
 
 matplotlib.style.use('default')  # to get rid of ugly arc style
 
@@ -910,7 +920,9 @@ class RingdownSetSweep:
             probe_z: Optional[float] = None,
             xerr: float = 0.020,
             extrapolation_r: Optional[float] = None,
-            **kwargs,
+            kwarg_func: Optional[Callable[[Any, int, int], PlotKwargs]] = None,
+            annotate_lines: bool = False,
+            **kwargs: Unpack[ErrorbarKwargs],
     ) -> dict[int, tuple[ErrorbarContainer, ...]]:
         if (probe is None) != (probe_z is None):
             raise ValueError('Cannot supply exactly one of probe, probe_z')
@@ -919,6 +931,12 @@ class RingdownSetSweep:
             _, plot_ax = plt.subplots()
         else:
             plot_ax = ax_fin
+
+        the_kwarg_func = (
+            self.kwarg_func
+            if kwarg_func is None else
+            kwarg_func
+        )
 
         q_vals = (
             range(self.q_range[1], self.q_range[0] - 1, -1)
@@ -941,7 +959,7 @@ class RingdownSetSweep:
             converted_stage_pos_masked = self.stage_pos_converter(mode_data_masked['stage_pos'])
             frequency = mode_data_masked['freq'].mean()
             errorbar_kw = (
-                self.kwarg_func(frequency, q, pol)
+                the_kwarg_func(frequency, q, pol)
                 | dict(alpha=1)
                 | kwargs
             )
@@ -961,7 +979,7 @@ class RingdownSetSweep:
             )
 
         if probe is not None:
-            for q in q_vals:
+            for idx, q in enumerate(q_vals):
                 bothpol_data = np.concatenate([self.finesses[q, +1], self.finesses[q, -1]])
                 bothpol_data_masked = mask_mode_data(bothpol_data)
                 log_finesse = unp.log(bothpol_data_masked['finesse'])
@@ -999,17 +1017,30 @@ class RingdownSetSweep:
                     )
 
                 r_space = 1e-3 * np.linspace(native_lolim, hilim)
-                plot_kw = (
-                    self.kwarg_func(frequency, q, +1)
+                plot_kw: PlotKwargs = (
+                    the_kwarg_func(frequency, q, +1)
                     | dict(alpha=0.7, marker=None)
                     | kwargs
                     | dict(linestyle='solid', label=None)
                 )
-                plot_ax.plot(
+                plot_line, = plot_ax.plot(
                     1e+3 * r_space,
                     np.exp(fit.eval(probe_r=r_space)),
                     **plot_kw,
                 )
+
+                if annotate_lines:
+                    annotate_text = f'$q = {q}$' if idx == len(q_vals) - 1 else f'${q}$'
+                    plot_ax.annotate(
+                        annotate_text,
+                        xy=(hilim, np.exp(fit.best_values['limit_log_fin'])),
+                        xytext=(0, -2),
+                        textcoords='offset points',
+                        horizontalalignment='right',
+                        verticalalignment='top',
+                        fontsize='small',
+                        color=plot_line.get_color(),
+                    )
 
         if ax_fin is None:
             plot_ax.set_yscale('log')
