@@ -1,15 +1,24 @@
+from collections.abc import Callable
 from numbers import Real
+from typing import Any
 
 import numpy as np
 import seaborn as sns
 from scipy.constants import pi
 from uncertainties import unumpy as unp
 
+from sslab_txz.typing import PlotKwargs
+
 textwidth_pts = 510
 columnwidth_pts = 246
 columnwidth_mpl_in = 5  # dimension for for plt.subplots()
 textwidth_mpl_in = columnwidth_mpl_in * textwidth_pts / columnwidth_pts
 
+
+descending_vlabel_kw = dict(
+    labelpad=10,
+    rotation=-90,
+)
 
 annotation_arrowprops_default = dict(
     color='0.3',
@@ -39,7 +48,7 @@ def kwarg_func_factory(
         markers: tuple[str, str] = polarization_markers,
         palette_func=mode_palette,
         **kwargs,
-):
+) -> Callable[[Any, int, int], PlotKwargs]:
     def kwarg_func(mode_data, q, pol):
         polstr = 'x' if pol == +1 else 'y'
         palette = palette_func(q_range[1] - q_range[0] + 1)
