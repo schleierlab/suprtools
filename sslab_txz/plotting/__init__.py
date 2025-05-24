@@ -283,6 +283,7 @@ def annotate_line(
         xytext=offset_pts,
         textcoords='offset points',
         rotation=rotation_angle,
+        rotation_mode='anchor',
         transform_rotates_text=True,
         **kwargs,
     )
