@@ -47,3 +47,7 @@ stanford = SimpleNamespace(
     fog_light = '#F4F4F4',
     fog_dark = '#B6B1A9',
 )
+'''
+Stanford identity colors.
+See https://identity.stanford.edu/design-elements/color/
+'''
