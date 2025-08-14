@@ -34,7 +34,6 @@ from lmfit.models import LinearModel
 from matplotlib.axes import Axes
 from matplotlib.container import ErrorbarContainer
 from numpy.typing import ArrayLike, NDArray
-from PIL import Image
 from scipy.constants import pi
 from tqdm import tqdm
 from uncertainties import UFloat, ufloat
@@ -441,6 +440,13 @@ class Ringdown(RingdownSet):
             xscale=1e+6,
             onering: bool = False,
     ):
+        """
+        Parameters
+        ----------
+        onering: bool, optional
+            If True, add a watermark of the One Ring from Lord of the Rings.
+            Purely for fun. Requires the optional dependency `PIL`.
+        """
         fig, axs = plt.subplot_mosaic(
             [
                 ['db', 'reim'],
@@ -495,6 +501,8 @@ class Ringdown(RingdownSet):
             sslab_style(ax)
 
         if onering:
+            from PIL import Image
+
             # we use a str ('.img') as the anchor here instead of an import `from . import img`
             # because that doesn't work with strict editable installs
             imfile = importlib.resources.files('.img') / 'onering_wikipedia.png'
