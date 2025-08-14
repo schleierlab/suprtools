@@ -8,7 +8,9 @@ version = "2024.1.5"
 dependencies = [
   "numpy",
   "matplotlib",
+  "seaborn"
   "scipy",
+  "lmfit",
   "openfermion",
   "tqdm",
   "scikit-image",
