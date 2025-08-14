@@ -136,13 +136,8 @@ def _show_cmap(cmap):
     ax.pcolormesh(x, cmap=cmap)
 
 def choose_cubehelix_doublegamma_palette(as_cmap=False):
-    """Launch an interactive widget to create a sequential cubehelix palette.
-
-    This corresponds with the :func:`cubehelix_palette` function. This kind
-    of palette is good for data that range between relatively uninteresting
-    low values and interesting high values. The cubehelix system allows the
-    palette to have more hue variance across the range, which can be helpful
-    for distinguishing a wider range of values.
+    """Launch an interactive widget to create a sequential cubehelix palette
+    with gamma correction in both lightness and hue.
 
     Requires IPython 2+ and must be used in the notebook.
 
