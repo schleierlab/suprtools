@@ -4,6 +4,7 @@ from typing import Any
 
 import numpy as np
 import seaborn as sns
+from matplotlib.typing import ColorType, MarkerType
 from scipy.constants import pi
 from uncertainties import unumpy as unp
 
@@ -45,10 +46,32 @@ def mode_palette(n_colors):
 def kwarg_func_factory(
         label: bool | str,
         q_range: tuple[int, int],
-        markers: tuple[str, str] = polarization_markers,
-        palette_func=mode_palette,
+        markers: tuple[MarkerType, MarkerType] = polarization_markers,
+        palette_func: Callable[[int], list[ColorType]] = mode_palette,
         **kwargs,
 ) -> Callable[[Any, int, int], PlotKwargs]:
+    '''
+    Parameters
+    ----------
+    label: bool or str
+    q_range: tuple[int, int]
+        The range of longitudinal indices q (min, max, inclusive) for
+        which we are plotting.
+    markers: tuple[MarkerType, MarkerType], optional
+        Markers for x and y polarization.
+    palette_func: (int) -> list[ColorType]
+        A function that takes in a number of colors and returns a color
+        palette with that many colors.
+    kwargs:
+        Additional kwargs that will be included in the output of
+        kwarg_func for any input.
+
+    Returns
+    -------
+    kwarg_func: (Any, int, int) -> PlotKwargs
+        Function that takes in mode_data, q (longitudinal index), and
+        polarization (+/-1) and gives a set of keyword-args for ax.plot
+    '''
     def kwarg_func(mode_data, q, pol):
         polstr = 'x' if pol == +1 else 'y'
         palette = palette_func(q_range[1] - q_range[0] + 1)

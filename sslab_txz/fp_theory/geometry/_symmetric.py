@@ -39,7 +39,13 @@ class SymmetricCavityGeometry(CavityGeometry):
     _eta_astig_u: MaybeUFloat = ufloat(0, 0)
     _asphere_p_u: MaybeUFloat = 0  # \tilde{p}, as defined in van Exter et al. (2022), eq. 28.
 
-    def __init__(self, length: MaybeUFloat, mirror_curv_rad: MaybeUFloat, eta_astig: MaybeUFloat = 0, asphere_p: MaybeUFloat = 0):
+    def __init__(
+            self,
+            length: MaybeUFloat,
+            mirror_curv_rad: MaybeUFloat,
+            eta_astig: MaybeUFloat = 0,
+            asphere_p: MaybeUFloat = 0,
+    ):
         self._length_u = self._to_ufloat(length)
         self._mirror_curv_rad_u = self._to_ufloat(mirror_curv_rad)
         self._eta_astig_u = self._to_ufloat(eta_astig)

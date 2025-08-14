@@ -347,13 +347,16 @@ class TEM00Fit:
         tem00fit_geom = self.geometry()
         with tqdm() as pbar:
             tem_model = Model(self._tem_fitfunc_factory(pbar), independent_vars=['qnind'])
+            params = tem_model.make_params(
+                length=tem00fit_geom.length,
+                mean_curv_rad=tem00fit_geom.mirror_curv_rad,
+                eta_astig_cos_misalign=tem00fit_geom.eta_astig,
+                asphere_p=tem00fit_geom.asphere_p,
+            )
             tem_fit_result = tem_model.fit(
                 tem_fit_recarray['freq'],
                 qnind=recfunctions.structured_to_unstructured(tem_fit_recarray[['q', 'n', 'ind']]),
-                length=tem00fit_geom.length,
-                mean_curv_rad=tem00fit_geom.mirror_curv_rad,
-                eta_astig=tem00fit_geom.eta_astig,
-                asphere_p=tem00fit_geom.asphere_p,
+                params=params,
             )
         return SymmetricCavityGeometry(
             tem_fit_result.uvars['length'].n,
