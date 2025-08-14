@@ -430,9 +430,9 @@ class Niobium(TypeIISuperconductor):
             impure_xi: bool = True,
     ):
         self.gap_temperature = gap_temperature
-        self.penetration_depth = penetration_depth
         super().__init__(
             residual_resistivity_ratio,
+            penetration_depth,
             warm_lambda,
             impure_lambda,
             impure_xi,
