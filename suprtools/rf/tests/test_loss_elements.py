@@ -1,9 +1,7 @@
 import numpy as np
 import pytest
 import skrf as rf
-
-from sslab_txz.rf.insertion_loss import (MeasuredLossyLine,
-                                         RootFrequencyLossElement)
+from suprtools.rf.insertion_loss import MeasuredLossyLine, RootFrequencyLossElement
 
 
 @pytest.fixture

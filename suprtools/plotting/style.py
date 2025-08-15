@@ -6,9 +6,8 @@ import numpy as np
 import seaborn as sns
 from matplotlib.typing import ColorType, MarkerType
 from scipy.constants import pi
+from suprtools.typing import PlotKwargs
 from uncertainties import unumpy as unp
-
-from sslab_txz.typing import PlotKwargs
 
 textwidth_pts = 510
 columnwidth_pts = 246

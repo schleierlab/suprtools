@@ -1,7 +1,6 @@
 import numpy as np
 import pytest
-
-from sslab_txz.rf.modedata import FabryPerotModeParams
+from suprtools.rf.modedata import FabryPerotModeParams
 
 
 @pytest.fixture

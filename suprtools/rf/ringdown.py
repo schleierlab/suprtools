@@ -27,6 +27,7 @@ import numpy as np
 import scipy.special
 import skimage.restoration
 import skrf as rf
+import suprtools.rydberg as rydtools
 from lmfit import Parameters
 from lmfit.minimizer import MinimizerResult
 from lmfit.model import ModelResult
@@ -35,21 +36,19 @@ from matplotlib.axes import Axes
 from matplotlib.container import ErrorbarContainer
 from numpy.typing import ArrayLike, NDArray
 from scipy.constants import pi
+from suprtools._typing import StrPath
+from suprtools.fp_theory.geometry._symmetric import SymmetricCavityGeometry
+from suprtools.plotting import expand_range, sslab_style
+from suprtools.plotting.style import kwarg_func_factory
+from suprtools.plotting.units import Units
+from suprtools.rf.couplers import Probe
+from suprtools.rf.cw import CWMeasurement
+from suprtools.rf.errors import FitFailureError
+from suprtools.rydberg import RydbergTransitionSeries
+from suprtools.typing import ErrorbarKwargs, ModeSpec, PlotKwargs
 from tqdm import tqdm
 from uncertainties import UFloat, ufloat
 from uncertainties import unumpy as unp
-
-import sslab_txz.rydberg as rydtools
-from sslab_txz._typing import StrPath
-from sslab_txz.fp_theory.geometry._symmetric import SymmetricCavityGeometry
-from sslab_txz.plotting import expand_range, sslab_style
-from sslab_txz.plotting.style import kwarg_func_factory
-from sslab_txz.plotting.units import Units
-from sslab_txz.rf.couplers import Probe
-from sslab_txz.rf.cw import CWMeasurement
-from sslab_txz.rf.errors import FitFailureError
-from sslab_txz.rydberg import RydbergTransitionSeries
-from sslab_txz.typing import ErrorbarKwargs, ModeSpec, PlotKwargs
 
 matplotlib.style.use('default')  # to get rid of ugly arc style
 

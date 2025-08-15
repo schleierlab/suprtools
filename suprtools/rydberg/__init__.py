@@ -7,8 +7,7 @@ import arc
 import lmfit
 import numpy as np
 from lmfit import Parameter
-
-from sslab_txz.typing import PlotKwargs
+from suprtools.typing import PlotKwargs
 
 QuantumNumberSpec = int | float | str
 LjmjSpec = tuple[QuantumNumberSpec, QuantumNumberSpec, QuantumNumberSpec]

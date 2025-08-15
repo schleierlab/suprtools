@@ -14,9 +14,8 @@ from matplotlib.axes import Axes
 from numpy._typing import _ArrayLikeInt_co
 from numpy.typing import ArrayLike, NDArray
 from scipy.constants import pi
+from suprtools.typing import ErrorbarKwargs
 from uncertainties import ufloat
-
-from sslab_txz.typing import ErrorbarKwargs
 
 
 class ModePlotStyler(Protocol):

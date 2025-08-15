@@ -3,8 +3,7 @@ from typing import cast
 import numpy as np
 import pytest
 from numpy.typing import NDArray
-
-from sslab_txz.rf.couplers import CylindricalProbe, Probe
+from suprtools.rf.couplers import CylindricalProbe, Probe
 
 
 @pytest.fixture

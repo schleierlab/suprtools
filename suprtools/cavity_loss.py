@@ -13,11 +13,10 @@ from numpy.typing import ArrayLike, NDArray
 from scipy import odr
 from scipy.constants import c, elementary_charge, hbar, mu_0, pi
 from scipy.constants import k as k_B
+from suprtools.plotting import expand_range, set_reci_ax
+from suprtools.plotting.units import Units
+from suprtools.typing import ErrorbarKwargs, PlotKwargs
 from uncertainties import unumpy as unp
-
-from sslab_txz.plotting import expand_range, set_reci_ax
-from sslab_txz.plotting.units import Units
-from sslab_txz.typing import ErrorbarKwargs, PlotKwargs
 
 phi_0 = scipy.constants.physical_constants['mag. flux quantum'][0]
 geom_factor_f = (pi / 4) * scipy.constants.value('characteristic impedance of vacuum')

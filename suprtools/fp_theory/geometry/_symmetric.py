@@ -11,19 +11,16 @@ from fractions import Fraction
 from typing import Literal, Optional, assert_never
 
 import numpy as np
+import suprtools.fp_theory.operators as ops
 from numpy.typing import ArrayLike, NDArray
 from scipy.constants import c, epsilon_0, pi
 from scipy.constants import h as planck_h
-from uncertainties import UFloat, ufloat
-from uncertainties import unumpy as unp
-
-import sslab_txz.fp_theory.operators as ops
-from sslab_txz._typing import MaybeUFloat
-from sslab_txz.fp_theory.coupling import NearConfocalCouplingMatrix
-from sslab_txz.fp_theory.coupling_config import CouplingConfig
-from sslab_txz.fp_theory.geometry._base import CavityGeometry
-from sslab_txz.fp_theory.modes import ScalarModeBasis
-from sslab_txz.fp_theory.operators import (
+from suprtools._typing import MaybeUFloat
+from suprtools.fp_theory.coupling import NearConfocalCouplingMatrix
+from suprtools.fp_theory.coupling_config import CouplingConfig
+from suprtools.fp_theory.geometry._base import CavityGeometry
+from suprtools.fp_theory.modes import ScalarModeBasis
+from suprtools.fp_theory.operators import (
     ScalarModeOperator,
     VectorModeOperator,
     a_minus,
@@ -31,6 +28,8 @@ from sslab_txz.fp_theory.operators import (
     a_plus,
     a_plus_dag,
 )
+from uncertainties import UFloat, ufloat
+from uncertainties import unumpy as unp
 
 
 class SymmetricCavityGeometry(CavityGeometry):

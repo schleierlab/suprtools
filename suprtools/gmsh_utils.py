@@ -6,9 +6,8 @@ from typing import Literal
 import gmsh
 import numpy as np
 from numpy.typing import NDArray
+from suprtools._typing import StrPath
 from tqdm import tqdm
-
-from sslab_txz._typing import StrPath
 
 gmsh.initialize(['-noenv'])
 

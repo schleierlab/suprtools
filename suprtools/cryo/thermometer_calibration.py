@@ -20,9 +20,8 @@ from matplotlib.figure import Figure
 from numpy.typing import ArrayLike, NDArray
 from scipy import odr
 from scipy.optimize import RootResults
-
-from sslab_txz._typing import StrPath
-from sslab_txz.plotting import sslab_style
+from suprtools._typing import StrPath
+from suprtools.plotting import sslab_style
 
 # we use a FileSystemLoader instead of a PackageLoader
 # for compatibility with strict-mode editable installs

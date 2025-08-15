@@ -9,8 +9,7 @@ from matplotlib.figure import Figure, SubFigure
 from matplotlib.layout_engine import ConstrainedLayoutEngine
 from matplotlib.ticker import AutoMinorLocator
 from numpy.typing import ArrayLike
-
-from sslab_txz.typing import AnnotateKwargs, TextKwargs
+from suprtools.typing import AnnotateKwargs, TextKwargs
 
 from ._angleannotation import AngleAnnotation as AngleAnnotation
 from .style import annotation_arrowprops_default

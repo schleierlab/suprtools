@@ -1,17 +1,18 @@
-sslab_txz: TODO blah
-=======================================
+suprtools: analysis for millimeter-wave cavities
+================================================
 
-sslab_txz is a data analysis library for
-the characterization of millimeter-wave Fabry–Pérot cavities.
+`suprtools` (**Su**perconducting **P**ost-paraxial **R**esonator tools)
+is a data analysis library for
+the characterization of millimeter-wave Fabry–Pérot cavities
+operating beyond the paraxial limit.
 
 
 Dependencies
 ------------
 
-sslab_txz should work with Python 3.12+. It does _not_ work for Python <=3.9.
+suprtools should work with Python 3.12+. It does _not_ work for Python ≤3.9.
 
-Installation requires the following dependencies:
-
+Installation requires the following dependencies
 for basic scientific computing:
 - [numpy](https://numpy.org/)
 - [matplotlib](https://matplotlib.org/)
@@ -19,7 +20,7 @@ for basic scientific computing:
 - [scipy](https://www.scipy.org/)
 - [lmfit](https://lmfit.github.io/)
 
-for specialized tasks:
+For specialized tasks:
 - [h5py](https://www.h5py.org/) for interfacing with the HDF5 files used to store data
 - [gmsh](https://gmsh.info/) for interfacing with finite-element simulation outputs from [small_fem](https://gitlab.onelab.info/gmsh/small_fem)
 - [arc](https://arc-alkali-rydberg-calculator.readthedocs.io/) for Rydberg atom properties
