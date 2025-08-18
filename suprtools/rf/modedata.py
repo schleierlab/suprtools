@@ -14,8 +14,9 @@ from matplotlib.axes import Axes
 from numpy._typing import _ArrayLikeInt_co
 from numpy.typing import ArrayLike, NDArray
 from scipy.constants import pi
-from suprtools.typing import ErrorbarKwargs
 from uncertainties import ufloat
+
+from suprtools.typing import ErrorbarKwargs
 
 
 class ModePlotStyler(Protocol):
@@ -25,6 +26,7 @@ class ModePlotStyler(Protocol):
 RecIndex1D = _ArrayLikeInt_co | slice
 
 
+# TODO deprecate in favor of a pandas-based solution
 class ModeParams:
     xs: tuple[NDArray[np.number], ...]
     params_arr: NDArray
