@@ -7,6 +7,7 @@ import arc
 import lmfit
 import numpy as np
 from lmfit import Parameter
+
 from suprtools.typing import PlotKwargs
 
 QuantumNumberSpec = int | float | str

@@ -2,6 +2,7 @@ import numpy as np
 import scipy.special
 from openfermion.ops import BosonOperator
 from openfermion.transforms import normal_ordered
+
 from suprtools.fp_theory.modes import ModeBasis, ScalarLGMode, ScalarModeBasis
 
 

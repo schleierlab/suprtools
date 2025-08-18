@@ -18,14 +18,15 @@ from matplotlib.ticker import MultipleLocator
 from numpy.typing import NDArray
 from scipy.constants import pi
 from skrf.network import Network
+from tqdm import tqdm
+from uncertainties import ufloat, unumpy
+
 from suprtools.fp_theory.coupling_config import CouplingConfig
 from suprtools.fp_theory.geometry._symmetric import SymmetricCavityGeometry
 from suprtools.plotting import mpl_usetex, sslab_style
 from suprtools.plotting.units import Units
 from suprtools.rf.errors import FitFailureError
 from suprtools.typing import PlotKwargs
-from tqdm import tqdm
-from uncertainties import ufloat, unumpy
 
 
 class ScanDataFilter:

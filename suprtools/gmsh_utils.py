@@ -6,8 +6,9 @@ from typing import Literal
 import gmsh
 import numpy as np
 from numpy.typing import NDArray
-from suprtools._typing import StrPath
 from tqdm import tqdm
+
+from suprtools._typing import StrPath
 
 gmsh.initialize(['-noenv'])
 
@@ -304,7 +305,7 @@ def vecfield_multi_probe_reim(re_tag, im_tag, points):
 
 class CurlGradField:
     '''
-    Encapsulation class for the field patterns returned by the quasi-2D
+    Encapsulation class for the field patterns returned by the quasi-3D
     small_fem simulation code.
     '''
 

@@ -4,11 +4,12 @@ import numpy as np
 import scipy.optimize
 import uncertainties
 from scipy.constants import c, pi
+from tqdm import tqdm
+from uncertainties import unumpy
+
 from suprtools.fp_theory.coupling_config import CouplingConfig
 from suprtools.fp_theory.geometry import SymmetricCavityGeometry
 from suprtools.fp_theory.modes import ScalarModeBasis, VectorModeBasis
-from tqdm import tqdm
-from uncertainties import unumpy
 
 
 class AnticrossingFit:

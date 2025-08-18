@@ -8,6 +8,7 @@ import matplotlib.transforms
 import numpy as np
 from matplotlib import pyplot as plt
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
 from suprtools.fp_theory.geometry._base import CavityGeometry
 from suprtools.fp_theory.modes import VectorModeBasis
 

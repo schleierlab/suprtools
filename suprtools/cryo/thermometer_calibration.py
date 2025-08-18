@@ -20,6 +20,7 @@ from matplotlib.figure import Figure
 from numpy.typing import ArrayLike, NDArray
 from scipy import odr
 from scipy.optimize import RootResults
+
 from suprtools._typing import StrPath
 from suprtools.plotting import sslab_style
 

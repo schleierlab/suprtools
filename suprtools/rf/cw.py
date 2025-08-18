@@ -10,7 +10,7 @@ from numpy.typing import ArrayLike, NDArray
 class CWMeasurement:
     s21: NDArray[np.complex128]
     t: NDArray[np.float64]
-    
+
     frequency: float
     '''Probe frequency of the measurement'''
 

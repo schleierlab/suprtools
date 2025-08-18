@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 import skrf as rf
+
 from suprtools.rf.insertion_loss import MeasuredLossyLine, RootFrequencyLossElement
 
 

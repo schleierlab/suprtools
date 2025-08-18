@@ -9,6 +9,7 @@ from matplotlib.figure import Figure, SubFigure
 from matplotlib.layout_engine import ConstrainedLayoutEngine
 from matplotlib.ticker import AutoMinorLocator
 from numpy.typing import ArrayLike
+
 from suprtools.typing import AnnotateKwargs, TextKwargs
 
 from ._angleannotation import AngleAnnotation as AngleAnnotation

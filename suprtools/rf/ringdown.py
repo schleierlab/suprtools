@@ -27,7 +27,6 @@ import numpy as np
 import scipy.special
 import skimage.restoration
 import skrf as rf
-import suprtools.rydberg as rydtools
 from lmfit import Parameters
 from lmfit.minimizer import MinimizerResult
 from lmfit.model import ModelResult
@@ -36,6 +35,11 @@ from matplotlib.axes import Axes
 from matplotlib.container import ErrorbarContainer
 from numpy.typing import ArrayLike, NDArray
 from scipy.constants import pi
+from tqdm import tqdm
+from uncertainties import UFloat, ufloat
+from uncertainties import unumpy as unp
+
+import suprtools.rydberg as rydtools
 from suprtools._typing import StrPath
 from suprtools.fp_theory.geometry._symmetric import SymmetricCavityGeometry
 from suprtools.plotting import expand_range, sslab_style
@@ -46,9 +50,6 @@ from suprtools.rf.cw import CWMeasurement
 from suprtools.rf.errors import FitFailureError
 from suprtools.rydberg import RydbergTransitionSeries
 from suprtools.typing import ErrorbarKwargs, ModeSpec, PlotKwargs
-from tqdm import tqdm
-from uncertainties import UFloat, ufloat
-from uncertainties import unumpy as unp
 
 matplotlib.style.use('default')  # to get rid of ugly arc style
 

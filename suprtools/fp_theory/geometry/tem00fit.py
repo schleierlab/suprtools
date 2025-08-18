@@ -13,12 +13,13 @@ from matplotlib.offsetbox import AnchoredText
 from numpy.lib import recfunctions
 from numpy.typing import ArrayLike
 from scipy.constants import c, pi
+from tqdm import tqdm
+from uncertainties import unumpy as unp
+
 from suprtools.fp_theory.coupling_config import CouplingConfig
 from suprtools.fp_theory.geometry import SymmetricCavityGeometry
 from suprtools.fp_theory.modes import ScalarModeBasis
 from suprtools.plotting import sslab_style
-from tqdm import tqdm
-from uncertainties import unumpy as unp
 
 InitParam: TypeAlias = float | dict | Literal[False]
 

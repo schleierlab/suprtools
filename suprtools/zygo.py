@@ -14,9 +14,10 @@ from matplotlib.colors import Colormap, Normalize
 from matplotlib.figure import Figure
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from numpy.typing import NDArray
+from uncertainties import unumpy as unp
+
 from suprtools.plotting import mpl_usetex
 from suprtools.plotting.units import Units
-from uncertainties import unumpy as unp
 
 
 # TODO: maybe deprecate in favor of `prysm` package?
