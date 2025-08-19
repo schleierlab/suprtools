@@ -17,7 +17,7 @@ except ImportError:
         raise ImportError(msg)
 
 
-# copied from seaborn palettes.py
+# copied and modified from seaborn palettes.py
 class _ColorPalette(list):
     """Set the color palette in a with statement, otherwise be a list."""
     def __enter__(self):

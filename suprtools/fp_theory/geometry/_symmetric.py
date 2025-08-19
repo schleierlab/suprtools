@@ -159,7 +159,7 @@ class SymmetricCavityGeometry(CavityGeometry):
     def alpha(self) -> float:
         '''
         The factor w1 / w0, where w0 is the mode waist and w1 is the
-        mode spot size on the mirror. This factor is constant.
+        mode spot size on the mirror. This factor is constant with frequency.
         '''
         # == w1 / w0
         return np.sqrt(self.mirror_curv_rad / (self.mirror_curv_rad - self.z1))
