@@ -60,6 +60,29 @@ def sslab_style(ax):
     make_grids(ax)
 
 
+def setup_paper_style(usetex: bool = True):
+    """Set up matplotlib rcParams for paper figures."""
+    matplotlib.rcParams['xtick.direction'] = 'in'
+    matplotlib.rcParams['ytick.direction'] = 'in'
+
+    matplotlib.rcParams['text.usetex'] = usetex
+    matplotlib.rcParams['font.family'] = 'sans-serif'
+    matplotlib.rcParams['font.sans-serif'] = ['Helvetica Neue', 'Helvetica']
+    matplotlib.rcParams['text.latex.preamble'] = '\n'.join([
+        R'\usepackage{tgheros}',    # helvetica font
+        R'\usepackage{sansmath}',   # math-font matching  helvetica
+        R'\sansmath'                # actually tell tex to use it!
+        R'\usepackage{siunitx}',    # micro symbols
+        R'\sisetup{detect-all, unit-mode=text, number-mode=math}',    # force siunitx to use the fonts
+        R'\DeclareSIUnit{\gauss}{G}',
+        R'\usepackage{amsmath}',
+        R'\usepackage{amssymb}',
+    ])
+
+    # Stanford font
+    # matpotlib.rcParams['font.sans-serif'] = ['Source Sans 3']
+
+
 def _digit_to_roman(digit: int, place: int) -> str:
     if not 1 <= digit <= 9:
         raise ValueError
