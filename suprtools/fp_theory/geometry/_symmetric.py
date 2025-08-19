@@ -223,6 +223,23 @@ class SymmetricCavityGeometry(CavityGeometry):
                 assert_never(norm)
         return (w0 / w) * _np.exp(-(r / w)**2) / field_norm_factor
 
+    def waist_radius_fromfreq(self, freq: ArrayLike) -> NDArray:
+        '''
+        The mode waist radius w_0 at cavity center, in m.
+
+        Parameters
+        ----------
+        freq : array_like
+            The frequency of the mode, in Hz.
+
+        Returns
+        -------
+        ndarray
+            The mode waist radius, in m.
+        '''
+        k = 2 * pi * np.asarray(freq) / c
+        return np.sqrt(2 * self.z0 / k)
+
     def mode_volume(self, longi_ind: ArrayLike):
         '''
         The mode volume of a TEM(00) mode:
