@@ -350,7 +350,7 @@ class TEM00Fit:
             params = tem_model.make_params(
                 length=tem00fit_geom.length,
                 mean_curv_rad=tem00fit_geom.mirror_curv_rad,
-                eta_astig_cos_misalign=tem00fit_geom.eta_astig,
+                eta_astig=tem00fit_geom.eta_astig,
                 asphere_p=tem00fit_geom.asphere_p,
             )
             tem_fit_result = tem_model.fit(
