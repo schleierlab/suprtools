@@ -116,7 +116,7 @@ class ThermometerCalibration(ThermometerSpec, ABC):
     serial_number: str
     name: str
 
-    interp_temps: ClassVar[NDArray[np.float_]] = np.concatenate((
+    interp_temps: ClassVar[NDArray[np.float64]] = np.concatenate((
         # linspace prevents floating pt errs, see arange docs
         np.linspace(0.006, 0.012, num=12, endpoint=False),
         np.linspace(0.012, 0.040, num=28, endpoint=False),

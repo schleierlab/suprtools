@@ -316,10 +316,10 @@ class CurlGradField:
     '''An integer giving the factor of reduction of the simulation volume
     vs the corresponding physical volume due to using symmetry'''
 
-    nodes: NDArray[np.float_]
+    nodes: NDArray[np.float64]
     '''(N, 3) array of coordinates for individual nodes'''
 
-    e_field: NDArray[np.complex_]
+    e_field: NDArray[np.complex128]
     '''(Complex) E-field values computed at each node in `self.nodes`'''
 
     def __init__(

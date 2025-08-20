@@ -105,7 +105,7 @@ def to_roman(n: int) -> str:
     return ''.join(reversed([_digit_to_roman(d, place) for place, d in enumerate(digits_reversed)]))
 
 
-def expand_range(values: ArrayLike, factor: float = 1.1) -> tuple[np.float_, np.float_]:
+def expand_range(values: ArrayLike, factor: float = 1.1) -> tuple[np.float64, np.float64]:
     '''
     Given a set of real values with extrema val_min, val_max,
     give a pair of numbers lo, hi such that the interval [lo, hi]
