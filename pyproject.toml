@@ -5,6 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "suprtools"
 version = "2025.8.14"
+requires-python = ">=3.10"
 dependencies = [
   "numpy",
   "matplotlib",
@@ -18,6 +19,8 @@ dependencies = [
   "aenum",
   "gmsh",
   "ARC-Alkali-Rydberg-Calculator",
+  "jinja2",
+  "ipykernel",
 ]
 
 [tool.ruff.lint]
