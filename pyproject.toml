@@ -15,6 +15,9 @@ dependencies = [
   "tqdm",
   "scikit-image",
   "scikit-rf",
+  "aenum",
+  "gmsh",
+  "ARC-Alkali-Rydberg-Calculator",
 ]
 
 [tool.ruff.lint]
