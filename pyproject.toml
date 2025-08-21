@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "suprtools"
-version = "2025.8.14"
+version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
   "numpy",
